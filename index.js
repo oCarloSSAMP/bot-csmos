@@ -61,7 +61,12 @@ const commands = [
         .setName('vetarmapa')
         .setDescription('Inicia o veto de mapas entre 2 capitães')
         .addUserOption(opt => opt.setName('capitao1').setDescription('Primeiro Capitão').setRequired(true))
-        .addUserOption(opt => opt.setName('capitao2').setDescription('Segundo Capitão').setRequired(true))
+        .addUserOption(opt => opt.setName('capitao2').setDescription('Segundo Capitão').setRequired(true)),
+
+    // 🧪 COMANDO DE TESTE NOVO
+    new SlashCommandBuilder()
+        .setName('teste')
+        .setDescription('Comando de teste do bot CSMOS')
 ];
 
 const rest = new REST({ version: '10' }).setToken(config.token);
@@ -163,6 +168,14 @@ client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
 
     const { commandName, guildId, channelId } = interaction;
+
+    // Comando /teste
+    if (commandName === 'teste') {
+        return interaction.reply({
+            content: '🎉 **Teste concluído com sucesso!** A atualização funcionou perfeitamente!',
+            ephemeral: true
+        });
+    }
 
     // Comando /config-rcon
     if (commandName === 'config-rcon') {
