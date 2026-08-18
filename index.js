@@ -405,6 +405,12 @@ client.on('interactionCreate', async interaction => {
             console.error('⚠️ Erro RCON ao buscar sv_password:', err.message);
         }
 
+        // Recupera as configurações do RCON (IP e Porta definidos no /config-rcon)
+        const serverConfig = await db.get(`rcon_${interaction.guildId}`);
+        const ipServidor = serverConfig && serverConfig.ip ? serverConfig.ip : '92.246.130.12';
+        const portaServidor = serverConfig && serverConfig.porta ? serverConfig.porta : '27015';
+        const comandoConnectFormatado = `connect ${ipServidor}:${portaServidor}`;
+
         // Calcula o horário atual + 8 minutos de carência para entrar na partida
         const dataComCarencia = new Date(Date.now() + 8 * 60 * 1000);
         const horarioGo = dataComCarencia.toLocaleTimeString('pt-BR', { 
@@ -414,7 +420,6 @@ client.on('interactionCreate', async interaction => {
             hour12: false 
         });
 
-        const serverConfig = await db.get(`rcon_${interaction.guildId}`);
         const tagCargoMencao = serverConfig && serverConfig.cargoMencaoId 
             ? `<@&${serverConfig.cargoMencaoId}>` 
             : '@Ranked CSMOS PLAYER';
@@ -426,7 +431,7 @@ client.on('interactionCreate', async interaction => {
                 { name: '🗺️ MAPA', value: `\`\`\`text\n${mapaEscolhido.nome.toUpperCase()}\n\`\`\``, inline: true },
                 { name: '⏰ GO', value: `\`\`\`text\n${horarioGo}\n\`\`\``, inline: true },
                 { name: '🔑 PASSWORD', value: `\`\`\`text\n${senhaJogo}\n\`\`\``, inline: true },
-                { name: '📥 DOWNLOAD DO MAPA', value: `[👉 Clique aqui para baixar ${mapaEscolhido.nome.toUpperCase()}](${mapaEscolhido.download})`, inline: false }
+                { name: '📥 DOWNLOAD DO MAPA', value: `[👉 Clique aqui para baixar ${mapaEscolhido.nome.toUpperCase()}](${mapaEscolhido.download})\n\n\`${comandoConnectFormatado}\``, inline: false }
             )
             .setImage(URL_GIF_ANUNCIO)
             .setFooter({ text: statusRcon });
@@ -460,7 +465,7 @@ client.on('interactionCreate', async interaction => {
                 embeds: [embedAnuncio],
                 components: [painelLinha1, painelLinha2]
             });
-            console.log('📌 [SUCESSO] Nova mensagem enviada com o GIF do Imgur!');
+            console.log('📌 [SUCESSO] Nova mensagem enviada com o IP e o GIF do Imgur!');
         } catch (errSend) {
             console.error('❌ Erro ao enviar a nova mensagem:', errSend);
         }
