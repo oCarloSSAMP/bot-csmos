@@ -7,7 +7,8 @@ const {
     EmbedBuilder, 
     REST, 
     Routes, 
-    SlashCommandBuilder 
+    SlashCommandBuilder,
+    StringSelectMenuBuilder
 } = require('discord.js');
 const { Rcon } = require('rcon-client');
 const { QuickDB } = require('quick.db');
@@ -41,6 +42,13 @@ const POOL_MAPAS = [
     { id: 'de_ancient_css', nome: 'Ancient', download: 'https://www.mediafire.com/file/bey9ug7yuyt8k81/MAPA+ANCIENT.zip/file' },
     { id: 'Anubis_cs2mix', nome: 'Anubis', download: 'https://www.mediafire.com/file/bglr6dgt3c5nw13/MAPA+ANUBIS.zip/file' }
 ];
+
+// Mapas específicos do 4Fun com links de download customizados
+const MAPAS_4FUN = {
+    'de_mirage': { nome: 'Mirage 4Fun', download: 'https://www.mediafire.com/file/7wldyhc5rcd1tnh/MAPA+MIRAGE+4FUN.zip/file' },
+    'de_dust2': { nome: 'Dust2 4Fun', download: 'https://www.mediafire.com/file/abs6m2rretk03xt/MAPA+DUST2FPS+4FUN.zip/file' },
+    'de_inferno': { nome: 'Inferno 4Fun', download: 'https://www.mediafire.com/file/ksjjrwprcriog6n/MAPA+INFERNO.zip/file' }
+};
 
 // Gerenciadores de estado para manter mensagens no rodapé
 const vetosAtivos = new Map();
@@ -311,8 +319,44 @@ function criarBotoesMapas(mapasDisponiveis, sessaoId, acao, estilo, prefixoRotul
     return rows;
 }
 
-// Gerenciador de cliques nos Botões
+// Gerenciador de cliques nos Botões e Menus
 client.on('interactionCreate', async interaction => {
+    // 1. Tratar Select Menus (para Kick, Ban e Mudar Mapa do 4Fun)
+    if (interaction.isStringSelectMenu()) {
+        const customId = interaction.customId;
+        if (customId.startsWith('4fun_select_')) {
+            const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
+            if (!serverConfig) return interaction.reply({ content: '❌ Servidor 4Fun não configurado.', ephemeral: true });
+
+            const isStaff = interaction.member.roles.cache.has(serverConfig.cargoId) || interaction.member.permissions.has('Administrator');
+            if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs autorizados!', ephemeral: true });
+
+            const acao = customId.replace('4fun_select_', '');
+            const valorEscolhido = interaction.values[0];
+
+            await interaction.deferReply({ ephemeral: true });
+            try {
+                const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 3000 });
+                await rcon.connect();
+
+                let respostaRcon = '';
+                if (acao === 'kick') {
+                    respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Você foi kickado do servidor 4Fun por um staff."`);
+                } else if (acao === 'ban') {
+                    respostaRcon = await rcon.send(`banid 30 ${valorEscolhido} kick; writeid`);
+                } else if (acao === 'map') {
+                    respostaRcon = await rcon.send(`changelevel ${valorEscolhido}`);
+                }
+
+                await rcon.end();
+                return interaction.editReply({ content: `✅ Ação executada com sucesso!\n\`\`\`text\n${respostaRcon || 'Comando enviado.'}\n\`\`\`` });
+            } catch (err) {
+                return interaction.editReply({ content: `❌ Erro ao executar comando RCON: ${err.message}` });
+            }
+        }
+        return;
+    }
+
     if (!interaction.isButton()) return;
 
     const customId = interaction.customId;
@@ -336,7 +380,12 @@ client.on('interactionCreate', async interaction => {
                 await rcon.end();
 
                 const matchMapa = statusResp.match(/map\s*:\s*([^\s\r\n]+)/i);
-                const mapaAtual = matchMapa ? matchMapa[1] : 'Desconhecido';
+                const mapaRaw = matchMapa ? matchMapa[1].toLowerCase() : 'desconhecido';
+
+                const dadosMapa = MAPAS_4FUN[mapaRaw] || { 
+                    nome: mapaRaw.toUpperCase(), 
+                    download: 'https://www.mediafire.com' 
+                };
 
                 const linhas = statusResp.split('\n');
                 let countPlayers = 0;
@@ -348,9 +397,9 @@ client.on('interactionCreate', async interaction => {
                     .setTitle('🎮 SERVIDOR CS:MOS - 4FUN')
                     .setColor('#10b981')
                     .addFields(
-                        { name: '🗺️ Mapa Atual', value: `\`${mapaAtual}\``, inline: true },
+                        { name: '🗺️ Mapa Atual', value: `\`${dadosMapa.nome}\``, inline: true },
                         { name: '👥 Jogadores Online', value: `\`${countPlayers}/32\``, inline: true },
-                        { name: '📥 Download do Mapa', value: '[📥 Baixar Mapa Atual do Servidor](https://www.mediafire.com)', inline: false }
+                        { name: '📥 Download do Mapa', value: `[📥 Baixar ${dadosMapa.nome}](${dadosMapa.download})`, inline: false }
                     )
                     .setFooter({ text: 'Apenas moderadores autorizados podem visualizar IPs e comandos administrativos.' })
                     .setTimestamp();
@@ -386,7 +435,7 @@ client.on('interactionCreate', async interaction => {
             }
         }
 
-        // 3. Menu de Gerenciamento (Somente Staff)
+        // 3. Menu de Gerenciamento (Gerar seletor dinâmico com os jogadores reais online)
         if (customId === '4fun_manage') {
             if (!isStaff) {
                 return interaction.reply({ content: '🚫 Apenas administradores/staffs podem usar as funções de moderação do 4Fun!', ephemeral: true });
@@ -399,6 +448,73 @@ client.on('interactionCreate', async interaction => {
             );
 
             return interaction.reply({ content: '⚙️ Escolha a ação de moderação RCON que deseja realizar:', components: [rowAdmin], ephemeral: true });
+        }
+
+        // Sub-botões de Ação Admin (Kick / Ban / Mapa)
+        if (customId === '4fun_cmd_kick' || customId === '4fun_cmd_ban' || customId === '4fun_cmd_map') {
+            if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs.', ephemeral: true });
+
+            await interaction.deferReply({ ephemeral: true });
+            try {
+                const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 3000 });
+                await rcon.connect();
+
+                if (customId === '4fun_cmd_map') {
+                    await rcon.end();
+                    const selectMapa = new StringSelectMenuBuilder()
+                        .setCustomId('4fun_select_map')
+                        .setPlaceholder('Selecione o mapa para alterar')
+                        .addOptions([
+                            { label: 'Mirage 4Fun', value: 'de_mirage' },
+                            { label: 'Dust2 4Fun', value: 'de_dust2' },
+                            { label: 'Inferno 4Fun', value: 'de_inferno' }
+                        ]);
+                    return interaction.editReply({ content: '🗺️ Escolha o mapa:', components: [new ActionRowBuilder().addComponents(selectMapa)] });
+                }
+
+                const statusResp = await rcon.send('status');
+                await rcon.end();
+
+                const linhas = statusResp.split('\n');
+                const options = [];
+
+                linhas.forEach(l => {
+                    const linhaLimpa = l.trim();
+                    if (linhaLimpa.startsWith('#') && !linhaLimpa.includes('userid')) {
+                        // Exemplo de linha do status: #  2 "NomeDoPlayer" 
+                        const match = linhaLimpa.match(/^#\s+(\d+)\s+"([^"]+)"/);
+                        if (match) {
+                            const userId = match[1];
+                            const nomePlayer = match[2];
+                            if (options.length < 25) { // Limite de 25 do Discord para Select Menus
+                                options.push({
+                                    label: nomePlayer.slice(0, 50),
+                                    description: `ID RCON / UserID: ${userId}`,
+                                    value: userId
+                                });
+                            }
+                        }
+                    }
+                });
+
+                if (options.length === 0) {
+                    return interaction.editReply({ content: '⚠️ Não há jogadores conectados no momento para kickar/banir.' });
+                }
+
+                const acaoStr = customId === '4fun_cmd_kick' ? 'kick' : 'ban';
+                const selectPlayers = new StringSelectMenuBuilder()
+                    .setCustomId(`4fun_select_${acaoStr}`)
+                    .setPlaceholder('Selecione o jogador na lista')
+                    .addOptions(options);
+
+                return interaction.editReply({
+                    content: `👤 Selecione abaixo qual jogador deseja **${acaoStr === 'kick' ? 'KICKAR' : 'BANIR'}**:`,
+                    components: [new ActionRowBuilder().addComponents(selectPlayers)]
+                });
+
+            } catch (err) {
+                return interaction.editReply({ content: `❌ Erro ao buscar jogadores online: ${err.message}` });
+            }
         }
     }
 
