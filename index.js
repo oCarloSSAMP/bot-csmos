@@ -16,7 +16,7 @@ const config = require('./config.json');
 
 // 🖼️ GIFs do Bot
 const URL_GIF_ANUNCIO = 'https://i.imgur.com/JPErhA4.gif';
-const URL_GIF_MIX = 'https://i.imgur.com/7Vv0uXG.gif';
+const URL_GIF_MIX = 'https://i.imgur.com/JPErhA4.gif';
 
 const client = new Client({
     intents: [
