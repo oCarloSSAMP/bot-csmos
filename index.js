@@ -432,7 +432,8 @@ client.on('interactionCreate', async interaction => {
                 { name: '⏰ GO', value: `\`\`\`text\n${horarioGo}\n\`\`\``, inline: true },
                 { name: '🔑 PASSWORD', value: `\`\`\`text\n${senhaJogo}\n\`\`\``, inline: true },
                 { name: '📥 DOWNLOAD DO MAPA', value: `[👉 Clique aqui para baixar ${mapaEscolhido.nome.toUpperCase()}](${mapaEscolhido.download})`, inline: false },
-                { name: '🔗 CONECTAR DIRETO NO SERVIDOR', value: `Clique para copiar caso o servidor não apareça:\n\`${comandoConnectFormatado}\``, inline: false }
+                { name: '🔗 CONECTAR DIRETO NO SERVIDOR', value: 'Caso o servidor não apareça na lista do jogo, clique e copie o comando abaixo:', inline: false },
+                { name: '📋 COMANDO PARA COPIAR', value: `\`${comandoConnectFormatado}\``, inline: false }
             )
             .setImage(URL_GIF_ANUNCIO)
             .setFooter({ text: statusRcon });
