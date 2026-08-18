@@ -410,7 +410,7 @@ client.on('interactionCreate', async interaction => {
         // ⏰ CÁLCULO DEFINITIVO: FUSO DE BRASÍLIA + 8 MINUTOS
         const dataFutura = new Date(Date.now() + 8 * 60 * 1000);
         const horarioGo = dataFutura.toLocaleTimeString('pt-BR', { 
-            timeZone: 'America_Sao_Paulo', 
+            timeZone: 'America/Sao_Paulo', 
             hour: '2-digit', 
             minute: '2-digit', 
             hour12: false 
