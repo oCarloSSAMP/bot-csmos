@@ -43,11 +43,11 @@ const POOL_MAPAS = [
     { id: 'Anubis_cs2mix', nome: 'Anubis', download: 'https://www.mediafire.com/file/bglr6dgt3c5nw13/MAPA+ANUBIS.zip/file' }
 ];
 
-// Mapas específicos do 4Fun com links de download customizados
+// Mapas específicos do 4Fun atualizados com os comandos exatos e links corretos
 const MAPAS_4FUN = {
-    'de_mirage': { nome: 'Mirage 4Fun', download: 'https://www.mediafire.com/file/7wldyhc5rcd1tnh/MAPA+MIRAGE+4FUN.zip/file' },
-    'de_dust2': { nome: 'Dust2 4Fun', download: 'https://www.mediafire.com/file/abs6m2rretk03xt/MAPA+DUST2FPS+4FUN.zip/file' },
-    'de_inferno': { nome: 'Inferno 4Fun', download: 'https://www.mediafire.com/file/ksjjrwprcriog6n/MAPA+INFERNO.zip/file' }
+    'de_dust2_fps': { nome: 'Dust2 4Fun', download: 'https://www.mediafire.com/file/abs6m2rretk03xt/MAPA+DUST2FPS+4FUN.zip/file' },
+    'de_mirage_csgo_v2': { nome: 'Mirage 4Fun', download: 'https://www.mediafire.com/file/7wldyhc5rcd1tnh/MAPA+MIRAGE+4FUN.zip/file' },
+    'de_inferno_csgo_cssold_fix': { nome: 'Inferno 4Fun', download: 'https://www.mediafire.com/file/ksjjrwprcriog6n/MAPA+INFERNO.zip/file' }
 };
 
 // Gerenciadores de estado para manter mensagens no rodapé
@@ -380,7 +380,7 @@ client.on('interactionCreate', async interaction => {
                 await rcon.end();
 
                 const matchMapa = statusResp.match(/map\s*:\s*([^\s\r\n]+)/i);
-                const mapaRaw = matchMapa ? matchMapa[1].toLowerCase() : 'desconhecido';
+                const mapaRaw = matchMapa ? matchMapa[1].toLowerCase().trim() : 'desconhecido';
 
                 const dadosMapa = MAPAS_4FUN[mapaRaw] || { 
                     nome: mapaRaw.toUpperCase(), 
@@ -435,7 +435,7 @@ client.on('interactionCreate', async interaction => {
             }
         }
 
-        // 3. Menu de Gerenciamento (Gerar seletor dinâmico com os jogadores reais online)
+        // 3. Menu de Gerenciamento
         if (customId === '4fun_manage') {
             if (!isStaff) {
                 return interaction.reply({ content: '🚫 Apenas administradores/staffs podem usar as funções de moderação do 4Fun!', ephemeral: true });
@@ -450,7 +450,7 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply({ content: '⚙️ Escolha a ação de moderação RCON que deseja realizar:', components: [rowAdmin], ephemeral: true });
         }
 
-        // Sub-botões de Ação Admin (Kick / Ban / Mapa)
+        // Sub-botões de Ação Admin (Kick / Ban / Mapa) com os mapas certos do 4Fun
         if (customId === '4fun_cmd_kick' || customId === '4fun_cmd_ban' || customId === '4fun_cmd_map') {
             if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs.', ephemeral: true });
 
@@ -463,11 +463,11 @@ client.on('interactionCreate', async interaction => {
                     await rcon.end();
                     const selectMapa = new StringSelectMenuBuilder()
                         .setCustomId('4fun_select_map')
-                        .setPlaceholder('Selecione o mapa para alterar')
+                        .setPlaceholder('Selecione o mapa exato do 4Fun')
                         .addOptions([
-                            { label: 'Mirage 4Fun', value: 'de_mirage' },
-                            { label: 'Dust2 4Fun', value: 'de_dust2' },
-                            { label: 'Inferno 4Fun', value: 'de_inferno' }
+                            { label: 'Dust2 4Fun', value: 'de_dust2_fps' },
+                            { label: 'Mirage 4Fun', value: 'de_mirage_csgo_v2' },
+                            { label: 'Inferno 4Fun', value: 'de_inferno_csgo_cssold_fix' }
                         ]);
                     return interaction.editReply({ content: '🗺️ Escolha o mapa:', components: [new ActionRowBuilder().addComponents(selectMapa)] });
                 }
@@ -481,15 +481,14 @@ client.on('interactionCreate', async interaction => {
                 linhas.forEach(l => {
                     const linhaLimpa = l.trim();
                     if (linhaLimpa.startsWith('#') && !linhaLimpa.includes('userid')) {
-                        // Exemplo de linha do status: #  2 "NomeDoPlayer" 
                         const match = linhaLimpa.match(/^#\s+(\d+)\s+"([^"]+)"/);
                         if (match) {
                             const userId = match[1];
                             const nomePlayer = match[2];
-                            if (options.length < 25) { // Limite de 25 do Discord para Select Menus
+                            if (options.length < 25) {
                                 options.push({
                                     label: nomePlayer.slice(0, 50),
-                                    description: `ID RCON / UserID: ${userId}`,
+                                    description: `UserID RCON: ${userId}`,
                                     value: userId
                                 });
                             }
@@ -498,17 +497,17 @@ client.on('interactionCreate', async interaction => {
                 });
 
                 if (options.length === 0) {
-                    return interaction.editReply({ content: '⚠️ Não há jogadores conectados no momento para kickar/banir.' });
+                    return interaction.editReply({ content: '⚠️ Não há jogadores conectados no momento no servidor 4Fun.' });
                 }
 
                 const acaoStr = customId === '4fun_cmd_kick' ? 'kick' : 'ban';
                 const selectPlayers = new StringSelectMenuBuilder()
                     .setCustomId(`4fun_select_${acaoStr}`)
-                    .setPlaceholder('Selecione o jogador na lista')
+                    .setPlaceholder('Selecione o jogador conectado')
                     .addOptions(options);
 
                 return interaction.editReply({
-                    content: `👤 Selecione abaixo qual jogador deseja **${acaoStr === 'kick' ? 'KICKAR' : 'BANIR'}**:`,
+                    content: `👤 Selecione abaixo qual jogador conectado deseja **${acaoStr === 'kick' ? 'KICKAR' : 'BANIR'}**:`,
                     components: [new ActionRowBuilder().addComponents(selectPlayers)]
                 });
 
@@ -663,13 +662,11 @@ client.on('interactionCreate', async interaction => {
             console.error('⚠️ Erro RCON ao buscar sv_password:', err.message);
         }
 
-        // Recupera as configurações do RCON (IP e Porta definidos no /config-rcon)
         const serverConfig = await db.get(`rcon_${interaction.guildId}`);
         const ipServidor = serverConfig && serverConfig.ip ? serverConfig.ip : '92.246.130.12';
         const portaServidor = serverConfig && serverConfig.porta ? serverConfig.porta : '27015';
         const comandoConnectFormatado = `connect ${ipServidor}:${portaServidor}`;
 
-        // Calcula o horário atual + 8 minutos de carência para entrar na partida
         const dataComCarencia = new Date(Date.now() + 8 * 60 * 1000);
         const horarioGo = dataComCarencia.toLocaleTimeString('pt-BR', { 
             timeZone: 'America/Sao_Paulo', 
@@ -696,7 +693,6 @@ client.on('interactionCreate', async interaction => {
             .setImage(URL_GIF_ANUNCIO)
             .setFooter({ text: statusRcon });
 
-        // Linha 1 de Botões do Painel RCON
         const painelLinha1 = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('rcon_go').setLabel('🚀 GO (exec mix)').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId('rcon_warmup').setLabel('🔥 Warmup (999s)').setStyle(ButtonStyle.Secondary),
@@ -704,7 +700,6 @@ client.on('interactionCreate', async interaction => {
             new ButtonBuilder().setCustomId('rcon_restart').setLabel('⚡ Restart (1s)').setStyle(ButtonStyle.Secondary)
         );
 
-        // Linha 2 de Botões do Painel RCON (Com Pause e Despause)
         const painelLinha2 = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('rcon_live').setLabel('🟢 LIVE (3s)').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId('rcon_pause').setLabel('⏸️ Pause').setStyle(ButtonStyle.Secondary),
@@ -725,13 +720,12 @@ client.on('interactionCreate', async interaction => {
                 embeds: [embedAnuncio],
                 components: [painelLinha1, painelLinha2]
             });
-            console.log('📌 [SUCESSO] Nova mensagem enviada com o IP e o GIF do Imgur!');
         } catch (errSend) {
             console.error('❌ Erro ao enviar a nova mensagem:', errSend);
         }
     }
 
-    // AÇÕES DO PAINEL RCON (GO, Warmup, Fim Warmup, Restart, LIVE, Pause, Despause, Status)
+    // AÇÕES DO PAINEL RCON
     if (customId.startsWith('rcon_')) {
         await interaction.deferReply({ ephemeral: true });
 
@@ -802,7 +796,7 @@ client.on('interactionCreate', async interaction => {
                 await interaction.editReply({ content: '⏸️ Comando **exec pause** enviado!' });
             } else if (customId === 'rcon_unpause') {
                 await executarRCON(interaction.guildId, 'exec unpause');
-                await interaction.editReply({ content: '▶️ Comando **exec unpause** enviado!' });
+                await interaction.editRegistry?.() || await interaction.editReply({ content: '▶️ Comando **exec unpause** enviado!' });
             }
         } catch (error) {
             await interaction.editReply({ content: `❌ Erro ao enviar RCON: ${error.message}` });
