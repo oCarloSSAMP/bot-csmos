@@ -67,7 +67,7 @@ const commands = [
 const rest = new REST({ version: '10' }).setToken(config.token);
 
 client.once('ready', async () => {
-    console.log(`✅ Bot CSMOS online como ${client.user.tag}`);
+    console.log(`✅ Bot CSMOS online como ${client.user.tag}[cite: 6]`);
     try {
         for (const guild of client.guilds.cache.values()) {
             await rest.put(
@@ -76,7 +76,7 @@ client.once('ready', async () => {
             );
             agendarProximaChecagemInatividade(guild);
         }
-        console.log('✅ Comandos / atualizados instantaneamente no servidor!');
+        console.log('✅ Comandos / atualizados instantaneamente no servidor![cite: 6]');
     } catch (error) {
         console.error('❌ Erro ao registrar comandos:', error);
     }
@@ -431,7 +431,8 @@ client.on('interactionCreate', async interaction => {
                 { name: '🗺️ MAPA', value: `\`\`\`text\n${mapaEscolhido.nome.toUpperCase()}\n\`\`\``, inline: true },
                 { name: '⏰ GO', value: `\`\`\`text\n${horarioGo}\n\`\`\``, inline: true },
                 { name: '🔑 PASSWORD', value: `\`\`\`text\n${senhaJogo}\n\`\`\``, inline: true },
-                { name: '📥 DOWNLOAD DO MAPA', value: `[👉 Clique aqui para baixar ${mapaEscolhido.nome.toUpperCase()}](${mapaEscolhido.download})\n\n\`${comandoConnectFormatado}\``, inline: false }
+                { name: '📥 DOWNLOAD DO MAPA', value: `[👉 Clique aqui para baixar ${mapaEscolhido.nome.toUpperCase()}](${mapaEscolhido.download})`, inline: false },
+                { name: '🔗 CONECTAR DIRETO NO SERVIDOR', value: `Caso o servidor não apareça na lista do jogo, clique e copie o comando abaixo para colar no console:\n\`${comandoConnectFormatado}\``, inline: false }
             )
             .setImage(URL_GIF_ANUNCIO)
             .setFooter({ text: statusRcon });
@@ -465,7 +466,7 @@ client.on('interactionCreate', async interaction => {
                 embeds: [embedAnuncio],
                 components: [painelLinha1, painelLinha2]
             });
-            console.log('📌 [SUCESSO] Nova mensagem enviada com o IP e o GIF do Imgur!');
+            console.log('📌 [SUCESSO] Nova mensagem enviada com o IP e o GIF do Imgur![cite: 6]');
         } catch (errSend) {
             console.error('❌ Erro ao enviar a nova mensagem:', errSend);
         }
