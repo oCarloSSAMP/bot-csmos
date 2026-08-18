@@ -1,4 +1,4 @@
-name: Deploy na VM
+name: Deploy Automático no Bot
 
 on:
   push:
@@ -9,13 +9,15 @@ jobs:
   deploy:
     runs-on: ubuntu-latest
     steps:
-      - name: Executar comandos na VM via SSH
+      - name: Conectar na VM e Atualizar o Bot
         uses: appleboy/ssh-action@v1.0.3
         with:
           host: ${{ secrets.SSH_HOST }}
           username: ${{ secrets.SSH_USER }}
           key: ${{ secrets.SSH_KEY }}
           script: |
-            cd CSMOS-BOT
+            export NVM_DIR="$HOME/.nvm"
+            [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+            cd CSMOS-BOT || cd bot-csmos
             git pull
-            pm2 restart csmos-bot
+            pm2 restart all || npx pm2 restart all
