@@ -63,7 +63,6 @@ const commands = [
         .addUserOption(opt => opt.setName('capitao1').setDescription('Primeiro Capitão').setRequired(true))
         .addUserOption(opt => opt.setName('capitao2').setDescription('Segundo Capitão').setRequired(true)),
 
-    // 🧪 COMANDO DE TESTE NOVO
     new SlashCommandBuilder()
         .setName('teste')
         .setDescription('Comando de teste do bot CSMOS')
@@ -418,21 +417,25 @@ client.on('interactionCreate', async interaction => {
             console.error('⚠️ Erro RCON ao buscar sv_password:', err.message);
         }
 
-        // Cálculo exato: Horário de Brasília (UTC-3) + 8 minutos
+        // ⏰ FORÇAR HORÁRIO DE BRASÍLIA + 8 MINUTOS
         const agora = new Date();
-        const brasiliaMS = agora.getTime() + (agora.getTimezoneOffset() * 60000) - (3 * 3600000);
-        const goTime = new Date(brasiliaMS + (8 * 60000));
-        const horarioGo = goTime.toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', hour12: false });
+        const goTime = new Date(agora.getTime() + (8 * 60 * 1000));
+        const horarioGo = goTime.toLocaleTimeString('pt-BR', { 
+            timeZone: 'America_Sao_Paulo', 
+            hour: '2-digit', 
+            minute: '2-digit', 
+            hour12: false 
+        });
 
         const serverConfig = await db.get(`rcon_${interaction.guildId}`);
         const tagCargoMencao = serverConfig && serverConfig.cargoMencaoId 
             ? `<@&${serverConfig.cargoMencaoId}>` 
             : '@Ranked CSMOS PLAYER';
 
-        // Obtenção dinâmica do IP e Porta do servidor
-        const connectStr = (serverConfig && serverConfig.ip && serverConfig.porta) 
-            ? `\`connect ${serverConfig.ip}:${serverConfig.porta}\`` 
-            : '`connect IP:PORTA`';
+        // 🔗 IP e Porta dinâmicos do /config-rcon
+        const ipServidor = (serverConfig && serverConfig.ip) ? serverConfig.ip : '92.246.130.12';
+        const portaServidor = (serverConfig && serverConfig.porta) ? serverConfig.porta : '27015';
+        const connectStr = `\`connect ${ipServidor}:${portaServidor}\``;
 
         const embedAnuncio = new EmbedBuilder()
             .setTitle('🎯 MAPA TROCADO')
