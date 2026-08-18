@@ -16,7 +16,7 @@ const config = require('./config.json');
 
 // 🖼️ GIFs do Bot
 const URL_GIF_ANUNCIO = 'https://i.imgur.com/JPErhA4.gif';
-const URL_GIF_MIX = 'https://i.imgur.com/JPErhA4.gif';
+const URL_GIF_MIX = 'https://i.imgur.com/7Vv0uXG.gif';
 
 const client = new Client({
     intents: [
@@ -106,13 +106,12 @@ async function executarRCON(guildId, comando) {
     return resposta;
 }
 
-// AUTO-RODAPÉ: Monitora conversas no chat para mover APENAS os painéis de veto e RCON para o final
+// AUTO-RODAPÉ
 client.on('messageCreate', async message => {
     if (message.author.bot || !message.guild) return;
 
     const channelId = message.channel.id;
 
-    // 1. Mover Painel de VETO ativo
     for (const [sessaoId, sessao] of vetosAtivos.entries()) {
         if (sessao.channelId === channelId && !sessao.processando) {
             sessao.processando = true;
@@ -137,7 +136,6 @@ client.on('messageCreate', async message => {
         }
     }
 
-    // 2. Mover Painel RCON (Anúncio do Mapa em Embed) ativo
     const painel = paineisAtivos.get(channelId);
     if (painel && !painel.processando) {
         painel.processando = true;
@@ -168,15 +166,13 @@ client.on('interactionCreate', async interaction => {
 
     const { commandName, guildId, channelId } = interaction;
 
-    // Comando /teste
     if (commandName === 'teste') {
         return interaction.reply({
-            content: '🎉 **Teste concluído com sucesso!** A atualização funcionou perfeitamente!',
+            content: '🎉 **Teste concluído com sucesso!** A atualização do fuso horário e GIFs funcionou!',
             ephemeral: true
         });
     }
 
-    // Comando /config-rcon
     if (commandName === 'config-rcon') {
         const ip = interaction.options.getString('ip');
         const porta = interaction.options.getString('porta');
@@ -198,7 +194,6 @@ client.on('interactionCreate', async interaction => {
         });
     }
 
-    // Comando /vetarmapa
     if (commandName === 'vetarmapa') {
         const cap1 = interaction.options.getUser('capitao1');
         const cap2 = interaction.options.getUser('capitao2');
@@ -234,7 +229,6 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
-// Helper para gerar linhas de botões
 function criarBotoesMapas(mapasDisponiveis, sessaoId, acao, estilo, prefixoRotulo = '') {
     const rows = [];
     let rowAtual = new ActionRowBuilder();
@@ -266,13 +260,11 @@ function criarBotoesMapas(mapasDisponiveis, sessaoId, acao, estilo, prefixoRotul
     return rows;
 }
 
-// Gerenciador de cliques nos Botões
 client.on('interactionCreate', async interaction => {
     if (!interaction.isButton()) return;
 
     const customId = interaction.customId;
 
-    // BOTÃO: CANCELAR VETO
     if (customId.startsWith('cancel_veto:')) {
         const [, sessaoId] = customId.split(':');
         const sessao = vetosAtivos.get(sessaoId);
@@ -305,7 +297,6 @@ client.on('interactionCreate', async interaction => {
         return;
     }
 
-    // FASE 1: BANIMENTO DE MAPAS
     if (customId.startsWith('ban:')) {
         const parts = customId.split(':');
         const sessaoId = parts[1];
@@ -364,7 +355,6 @@ client.on('interactionCreate', async interaction => {
         await interaction.update({ embeds: [embed], components: rows });
     }
 
-    // FASE 2: ESCOLHA FINAL (PICK)
     if (customId.startsWith('pick:')) {
         await interaction.deferUpdate().catch(() => {});
 
@@ -417,10 +407,9 @@ client.on('interactionCreate', async interaction => {
             console.error('⚠️ Erro RCON ao buscar sv_password:', err.message);
         }
 
-        // ⏰ FORÇAR HORÁRIO DE BRASÍLIA + 8 MINUTOS
-        const agora = new Date();
-        const goTime = new Date(agora.getTime() + (8 * 60 * 1000));
-        const horarioGo = goTime.toLocaleTimeString('pt-BR', { 
+        // ⏰ CÁLCULO DEFINITIVO: FUSO DE BRASÍLIA + 8 MINUTOS
+        const dataFutura = new Date(Date.now() + 8 * 60 * 1000);
+        const horarioGo = dataFutura.toLocaleTimeString('pt-BR', { 
             timeZone: 'America_Sao_Paulo', 
             hour: '2-digit', 
             minute: '2-digit', 
@@ -432,10 +421,9 @@ client.on('interactionCreate', async interaction => {
             ? `<@&${serverConfig.cargoMencaoId}>` 
             : '@Ranked CSMOS PLAYER';
 
-        // 🔗 IP e Porta dinâmicos do /config-rcon
-        const ipServidor = (serverConfig && serverConfig.ip) ? serverConfig.ip : '92.246.130.12';
-        const portaServidor = (serverConfig && serverConfig.porta) ? serverConfig.porta : '27015';
-        const connectStr = `\`connect ${ipServidor}:${portaServidor}\``;
+        const connectStr = (serverConfig && serverConfig.ip && serverConfig.porta) 
+            ? `\`connect ${serverConfig.ip}:${serverConfig.porta}\`` 
+            : '`connect IP:PORTA`';
 
         const embedAnuncio = new EmbedBuilder()
             .setTitle('🎯 MAPA TROCADO')
@@ -450,7 +438,6 @@ client.on('interactionCreate', async interaction => {
             .setImage(URL_GIF_ANUNCIO)
             .setFooter({ text: statusRcon });
 
-        // Linha 1 de Botões do Painel RCON
         const painelLinha1 = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('rcon_go').setLabel('🚀 GO (exec mix)').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId('rcon_warmup').setLabel('🔥 Warmup (999s)').setStyle(ButtonStyle.Secondary),
@@ -458,7 +445,6 @@ client.on('interactionCreate', async interaction => {
             new ButtonBuilder().setCustomId('rcon_restart').setLabel('⚡ Restart (1s)').setStyle(ButtonStyle.Secondary)
         );
 
-        // Linha 2 de Botões do Painel RCON (Com Pause e Despause)
         const painelLinha2 = new ActionRowBuilder().addComponents(
             new ButtonBuilder().setCustomId('rcon_live').setLabel('🟢 LIVE (3s)').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId('rcon_pause').setLabel('⏸️ Pause').setStyle(ButtonStyle.Secondary),
@@ -479,13 +465,11 @@ client.on('interactionCreate', async interaction => {
                 embeds: [embedAnuncio],
                 components: [painelLinha1, painelLinha2]
             });
-            console.log('📌 [SUCESSO] Nova mensagem enviada com o GIF do Imgur!');
         } catch (errSend) {
             console.error('❌ Erro ao enviar a nova mensagem:', errSend);
         }
     }
 
-    // AÇÕES DO PAINEL RCON (GO, Warmup, Fim Warmup, Restart, LIVE, Pause, Despause, Status)
     if (customId.startsWith('rcon_')) {
         await interaction.deferReply({ ephemeral: true });
 
