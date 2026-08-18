@@ -15,7 +15,7 @@ const db = new QuickDB();
 const config = require('./config.json');
 
 // 🖼️ GIFs do Bot
-const URL_GIF_ANUNCIO = 'https://i.imgur.com/JPErhA4.gif';
+const URL_GIF_ANUNCIO = 'aahttps://i.imgur.com/JPErhA4.gif';
 const URL_GIF_MIX = 'https://i.imgur.com/7Vv0uXG.gif';
 
 const client = new Client({
@@ -56,6 +56,18 @@ const commands = [
         .addStringOption(opt => opt.setName('senha').setDescription('Senha RCON privada').setRequired(true))
         .addRoleOption(opt => opt.setName('cargo_staff').setDescription('Cargo com permissão de admin/staff').setRequired(true))
         .addRoleOption(opt => opt.setName('cargo_mencao').setDescription('Cargo a ser mencionado ao trocar o mapa').setRequired(true)),
+
+    new SlashCommandBuilder()
+        .setName('config-4fun')
+        .setDescription('Configura o IP, Porta, Senha RCON e Cargo Staff do Servidor 4Fun')
+        .addStringOption(opt => opt.setName('ip').setDescription('IP do Servidor 4Fun').setRequired(true))
+        .addStringOption(opt => opt.setName('porta').setDescription('Porta RCON do 4Fun (Ex: 27015)').setRequired(true))
+        .addStringOption(opt => opt.setName('senha').setDescription('Senha RCON do 4Fun').setRequired(true))
+        .addRoleOption(opt => opt.setName('cargo_staff').setDescription('Cargo com permissão para gerenciar o 4Fun').setRequired(true)),
+
+    new SlashCommandBuilder()
+        .setName('painel-4fun')
+        .setDescription('Envia o painel interativo de informações do servidor 4Fun no canal atual'),
 
     new SlashCommandBuilder()
         .setName('vetarmapa')
@@ -186,6 +198,51 @@ client.on('interactionCreate', async interaction => {
         });
     }
 
+    // Comando /config-4fun
+    if (commandName === 'config-4fun') {
+        const ip = interaction.options.getString('ip');
+        const porta = interaction.options.getString('porta');
+        const senha = interaction.options.getString('senha');
+        const cargoStaff = interaction.options.getRole('cargo_staff');
+
+        await db.set(`rcon_${guildId}_4fun`, { 
+            ip, 
+            porta, 
+            senha, 
+            cargoId: cargoStaff.id 
+        });
+
+        return interaction.reply({
+            content: `✅ Servidor 4Fun configurado com sucesso!\n**IP:** \`${ip}:${porta}\` | **Staff Autorizado:** ${cargoStaff}`,
+            ephemeral: true
+        });
+    }
+
+    // Comando /painel-4fun
+    if (commandName === 'painel-4fun') {
+        const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
+        if (!serverConfig) {
+            return interaction.reply({ content: '❌ Configure o servidor primeiro usando o comando `/config-4fun`.', ephemeral: true });
+        }
+
+        const embedPainel = new EmbedBuilder()
+            .setTitle('🎮 SERVIDOR CS:MOS - 4FUN')
+            .setColor('#38bdf8')
+            .setDescription('🔄 Clique no botão abaixo para carregar as informações do servidor...')
+            .setTimestamp();
+
+        const rowBotoes = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('4fun_refresh').setLabel('🔄 Atualizar Status').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('4fun_players').setLabel('👥 Ver Jogadores (Staff)').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('4fun_manage').setLabel('⚙️ Gerenciar (Kick/Ban/Mapa)').setStyle(ButtonStyle.Danger)
+        );
+
+        const msgPainel = await interaction.channel.send({ embeds: [embedPainel], components: [rowBotoes] });
+        await db.set(`painel_msg_${interaction.guildId}`, { channelId: interaction.channelId, messageId: msgPainel.id });
+
+        return interaction.reply({ content: '✅ Painel do 4Fun fixado com sucesso!', ephemeral: true });
+    }
+
     // Comando /vetarmapa
     if (commandName === 'vetarmapa') {
         const cap1 = interaction.options.getUser('capitao1');
@@ -259,6 +316,91 @@ client.on('interactionCreate', async interaction => {
     if (!interaction.isButton()) return;
 
     const customId = interaction.customId;
+
+    // BOTÕES DO 4FUN
+    if (customId.startsWith('4fun_')) {
+        const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
+        if (!serverConfig) {
+            return interaction.reply({ content: '❌ Servidor 4Fun não configurado.', ephemeral: true });
+        }
+
+        const isStaff = interaction.member.roles.cache.has(serverConfig.cargoId) || interaction.member.permissions.has('Administrator');
+
+        // 1. Atualizar Status do Painel 4Fun
+        if (customId === '4fun_refresh') {
+            await interaction.deferUpdate();
+            try {
+                const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 3000 });
+                await rcon.connect();
+                const statusResp = await rcon.send('status');
+                await rcon.end();
+
+                const matchMapa = statusResp.match(/map\s*:\s*([^\s\r\n]+)/i);
+                const mapaAtual = matchMapa ? matchMapa[1] : 'Desconhecido';
+
+                const linhas = statusResp.split('\n');
+                let countPlayers = 0;
+                linhas.forEach(l => {
+                    if (l.trim().startsWith('#') && !l.includes('userid')) countPlayers++;
+                });
+
+                const embedAtualizada = new EmbedBuilder()
+                    .setTitle('🎮 SERVIDOR CS:MOS - 4FUN')
+                    .setColor('#10b981')
+                    .addFields(
+                        { name: '🗺️ Mapa Atual', value: `\`${mapaAtual}\``, inline: true },
+                        { name: '👥 Jogadores Online', value: `\`${countPlayers}/32\``, inline: true },
+                        { name: '📥 Download do Mapa', value: '[📥 Baixar Mapa Atual do Servidor](https://www.mediafire.com)', inline: false }
+                    )
+                    .setFooter({ text: 'Apenas moderadores autorizados podem visualizar IPs e comandos administrativos.' })
+                    .setTimestamp();
+
+                await interaction.message.edit({ embeds: [embedAtualizada] });
+            } catch (err) {
+                return interaction.followUp({ content: `❌ Erro ao conectar no RCON do 4Fun: ${err.message}`, ephemeral: true });
+            }
+        }
+
+        // 2. Ver Jogadores (Somente Staff)
+        if (customId === '4fun_players') {
+            if (!isStaff) {
+                return interaction.reply({ content: '🚫 Apenas membros da Staff autorizados podem ver a lista detalhada de jogadores!', ephemeral: true });
+            }
+
+            await interaction.deferReply({ ephemeral: true });
+            try {
+                const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 3000 });
+                await rcon.connect();
+                const statusResp = await rcon.send('status');
+                await rcon.end();
+
+                const linhas = statusResp.split('\n');
+                const jogadores = linhas
+                    .filter(l => l.trim().startsWith('#') && !l.includes('userid'))
+                    .map(l => l.trim())
+                    .join('\n');
+
+                return interaction.editReply({ content: `👥 **Lista de Jogadores Conectados (Staff):**\n\`\`\`text\n${jogadores || 'Nenhum jogador online.'}\n\`\`\`` });
+            } catch (err) {
+                return interaction.editReply({ content: `❌ Erro ao buscar jogadores: ${err.message}` });
+            }
+        }
+
+        // 3. Menu de Gerenciamento (Somente Staff)
+        if (customId === '4fun_manage') {
+            if (!isStaff) {
+                return interaction.reply({ content: '🚫 Apenas administradores/staffs podem usar as funções de moderação do 4Fun!', ephemeral: true });
+            }
+
+            const rowAdmin = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('4fun_cmd_map').setLabel('🗺️ Mudar Mapa').setStyle(ButtonStyle.Secondary),
+                new ButtonBuilder().setCustomId('4fun_cmd_kick').setLabel('👢 Kickar Jogador').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('4fun_cmd_ban').setLabel('🔨 Banir Jogador').setStyle(ButtonStyle.Danger)
+            );
+
+            return interaction.reply({ content: '⚙️ Escolha a ação de moderação RCON que deseja realizar:', components: [rowAdmin], ephemeral: true });
+        }
+    }
 
     // BOTÃO: CANCELAR VETO
     if (customId.startsWith('cancel_veto:')) {
