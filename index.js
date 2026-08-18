@@ -405,8 +405,9 @@ client.on('interactionCreate', async interaction => {
             console.error('⚠️ Erro RCON ao buscar sv_password:', err.message);
         }
 
-        // Correção aplicada aqui (substituído 'America_Sao_Paulo' por 'America/Sao_Paulo')
-        const horarioGo = new Date().toLocaleTimeString('pt-BR', { 
+        // Calcula o horário atual + 8 minutos de carência para entrar na partida
+        const dataComCarencia = new Date(Date.now() + 8 * 60 * 1000);
+        const horarioGo = dataComCarencia.toLocaleTimeString('pt-BR', { 
             timeZone: 'America/Sao_Paulo', 
             hour: '2-digit', 
             minute: '2-digit',
