@@ -405,11 +405,13 @@ client.on('interactionCreate', async interaction => {
             console.error('⚠️ Erro RCON ao buscar sv_password:', err.message);
         }
 
-        const agora = new Date();
-        agora.setMinutes(agora.getMinutes() + 8);
-        const horas = String(agora.getHours()).padStart(2, '0');
-        const minutos = String(agora.getMinutes()).padStart(2, '0');
-        const horarioGo = `${horas}:${minutos}`;
+        // Correção aplicada aqui (substituído 'America_Sao_Paulo' por 'America/Sao_Paulo')
+        const horarioGo = new Date().toLocaleTimeString('pt-BR', { 
+            timeZone: 'America/Sao_Paulo', 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: false 
+        });
 
         const serverConfig = await db.get(`rcon_${interaction.guildId}`);
         const tagCargoMencao = serverConfig && serverConfig.cargoMencaoId 
