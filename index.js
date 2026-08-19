@@ -223,6 +223,8 @@ function iniciarLoopPainel4Fun(guild) {
                 }
             });
 
+            const comandoConnectFormatado = `connect ${serverConfig.ip}:${serverConfig.porta}`;
+
             const embedAtualizada = new EmbedBuilder()
                 .setTitle('🎮 SERVIDOR CS:MOS - 4FUN')
                 .setColor('#38bdf8')
@@ -232,7 +234,10 @@ function iniciarLoopPainel4Fun(guild) {
                     { name: '👥 Jogadores Online', value: `\`${countPlayers}/32\``, inline: true },
                     { name: '\u200B', value: '\u200B', inline: false },
                     { name: '📋 Jogadores Conectados', value: listaNomes.length > 0 ? `${listaNomes.join('\n')}` : '_Nenhum jogador online no momento._', inline: false },
-                    { name: '📥 Download do Mapa', value: `[📥 Baixar ${dadosMapa.nome}](${dadosMapa.download})`, inline: false }
+                    { name: '\u200B', value: '\u200B', inline: false },
+                    { name: '📥 Download do Mapa', value: `[📥 Baixar ${dadosMapa.nome}](${dadosMapa.download})`, inline: false },
+                    { name: '🔗 CONECTAR DIRETO NO SERVIDOR', value: 'Caso o servidor não apareça na lista do jogo, clique e copie o comando abaixo:', inline: false },
+                    { name: '📋 COMANDO PARA COPIAR', value: `\`${comandoConnectFormatado}\``, inline: false }
                 )
                 .setFooter({ text: '🔄 Atualizado automaticamente a cada 1 minuto • Painel Oficial 4Fun' })
                 .setTimestamp();
@@ -495,6 +500,8 @@ client.on('interactionCreate', async interaction => {
                     }
                 });
 
+                const comandoConnectFormatado = `connect ${serverConfig.ip}:${serverConfig.porta}`;
+
                 const embedAtualizada = new EmbedBuilder()
                     .setTitle('🎮 SERVIDOR CS:MOS - 4FUN')
                     .setColor('#38bdf8')
@@ -504,7 +511,10 @@ client.on('interactionCreate', async interaction => {
                         { name: '👥 Jogadores Online', value: `\`${countPlayers}/32\``, inline: true },
                         { name: '\u200B', value: '\u200B', inline: false },
                         { name: '📋 Jogadores Conectados', value: listaNomes.length > 0 ? `${listaNomes.join('\n')}` : '_Nenhum jogador online no momento._', inline: false },
-                        { name: '📥 Download do Mapa', value: `[📥 Baixar ${dadosMapa.nome}](${dadosMapa.download})`, inline: false }
+                        { name: '\u200B', value: '\u200B', inline: false },
+                        { name: '📥 Download do Mapa', value: `[📥 Baixar ${dadosMapa.nome}](${dadosMapa.download})`, inline: false },
+                        { name: '🔗 CONECTAR DIRETO NO SERVIDOR', value: 'Caso o servidor não apareça na lista do jogo, clique e copie o comando abaixo:', inline: false },
+                        { name: '📋 COMANDO PARA COPIAR', value: `\`${comandoConnectFormatado}\``, inline: false }
                     )
                     .setFooter({ text: '🔄 Atualizado com sucesso • Painel Oficial 4Fun' })
                     .setTimestamp();
