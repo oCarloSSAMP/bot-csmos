@@ -95,6 +95,7 @@ client.once('ready', async () => {
                 { body: commands }
             );
             agendarProximaChecagemInatividade(guild);
+            iniciarLoopPainel4Fun(guild);
         }
         console.log('✅ Comandos / atualizados instantaneamente no servidor!');
     } catch (error) {
@@ -178,6 +179,99 @@ client.on('messageCreate', async message => {
     }
 });
 
+// Loop automático para atualizar o Painel do 4Fun a cada 1 minuto
+function iniciarLoopPainel4Fun(guild) {
+    setInterval(async () => {
+        try {
+            const painelInfo = await db.get(`painel_4fun_${guild.id}`);
+            if (!painelInfo) return;
+
+            const channel = guild.channels.cache.get(painelInfo.channelId);
+            if (!channel) return;
+
+            const message = await channel.messages.fetch(painelInfo.messageId).catch(() => null);
+            if (!message) return;
+
+            const serverConfig = await db.get(`rcon_${guild.id}_4fun`);
+            if (!serverConfig) return;
+
+            const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 3000 });
+            await rcon.connect();
+            const statusResp = await rcon.send('status');
+            await rcon.end();
+
+            const matchMapa = statusResp.match(/map\s*:\s*([^\s\r\n]+)/i);
+            const mapaRaw = matchMapa ? matchMapa[1].toLowerCase().trim() : 'desconhecido';
+
+            const dadosMapa = MAPAS_4FUN[mapaRaw] || { 
+                nome: mapaRaw.toUpperCase(), 
+                download: 'https://www.mediafire.com' 
+            };
+
+            const linhas = statusResp.split('\n');
+            let countPlayers = 0;
+            const listaNomes = [];
+
+            linhas.forEach(l => {
+                const linhaLimpa = l.trim();
+                if (linhaLimpa.startsWith('#') && !linhaLimpa.includes('userid')) {
+                    countPlayers++;
+                    const matchName = linhaLimpa.match(/^#\s+\d+\s+"([^"]+)"/);
+                    if (matchName) {
+                        listaNomes.push(`🔹 ${matchName[1]}`);
+                    }
+                }
+            });
+
+            const embedAtualizada = new EmbedBuilder()
+                .setTitle('🎮 SERVIDOR CS:MOS - 4FUN')
+                .setColor('#38bdf8')
+                .setDescription('Painel de monitoramento em tempo real do servidor 4Fun.')
+                .addFields(
+                    { name: '🗺️ Mapa Atual', value: `\`${dadosMapa.nome}\``, inline: true },
+                    { name: '👥 Jogadores Online', value: `\`${countPlayers}/32\``, inline: true },
+                    { name: '\u200B', value: '\u200B', inline: false },
+                    { name: '📋 Jogadores Conectados', value: listaNomes.length > 0 ? `${listaNomes.join('\n')}` : '_Nenhum jogador online no momento._', inline: false },
+                    { name: '📥 Download do Mapa', value: `[📥 Baixar ${dadosMapa.nome}](${dadosMapa.download})`, inline: false }
+                )
+                .setFooter({ text: '🔄 Atualizado automaticamente a cada 1 minuto • Painel Oficial 4Fun' })
+                .setTimestamp();
+
+            const rowBotoes = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('4fun_refresh').setLabel('🔄 Atualizar Agora').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('4fun_manage').setLabel('⚙️ Gerenciar (Kick/Ban/Mapa)').setStyle(ButtonStyle.Danger)
+            );
+
+            await message.edit({ embeds: [embedAtualizada], components: [rowBotoes] }).catch(() => {});
+        } catch (err) {
+            // Servidor caiu ou offline
+            try {
+                const painelInfo = await db.get(`painel_4fun_${guild.id}`);
+                if (!painelInfo) return;
+
+                const channel = guild.channels.cache.get(painelInfo.channelId);
+                if (!channel) return;
+
+                const message = await channel.messages.fetch(painelInfo.messageId).catch(() => null);
+                if (!message) return;
+
+                const embedOffline = new EmbedBuilder()
+                    .setTitle('🎮 SERVIDOR CS:MOS - 4FUN [OFFLINE]')
+                    .setColor('#ef4444')
+                    .setDescription('⚠️ **O servidor caiu ou está offline!**\nBasta aguardar o responsável ligar o servidor novamente. As informações voltarão a ser atualizadas automaticamente em breve.')
+                    .setFooter({ text: '🔴 Servidor Inativo • Tentando reconectar...' })
+                    .setTimestamp();
+
+                const rowBotoes = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('4fun_refresh').setLabel('🔄 Tentar Reconectar').setStyle(ButtonStyle.Secondary)
+                );
+
+                await message.edit({ embeds: [embedOffline], components: [rowBotoes] }).catch(() => {});
+            } catch (e) {}
+        }
+    }, 60 * 1000);
+}
+
 // Interação dos Comandos Slash (/)
 client.on('interactionCreate', async interaction => {
     if (!interaction.isChatInputCommand()) return;
@@ -236,19 +330,18 @@ client.on('interactionCreate', async interaction => {
         const embedPainel = new EmbedBuilder()
             .setTitle('🎮 SERVIDOR CS:MOS - 4FUN')
             .setColor('#38bdf8')
-            .setDescription('🔄 Clique no botão abaixo para carregar as informações do servidor...')
+            .setDescription('🔄 Carregando informações do servidor 4Fun...')
             .setTimestamp();
 
         const rowBotoes = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('4fun_refresh').setLabel('🔄 Atualizar Status').setStyle(ButtonStyle.Primary),
-            new ButtonBuilder().setCustomId('4fun_players').setLabel('👥 Ver Jogadores (Staff)').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('4fun_refresh').setLabel('🔄 Atualizar Agora').setStyle(ButtonStyle.Primary),
             new ButtonBuilder().setCustomId('4fun_manage').setLabel('⚙️ Gerenciar (Kick/Ban/Mapa)').setStyle(ButtonStyle.Danger)
         );
 
         const msgPainel = await interaction.channel.send({ embeds: [embedPainel], components: [rowBotoes] });
-        await db.set(`painel_msg_${interaction.guildId}`, { channelId: interaction.channelId, messageId: msgPainel.id });
+        await db.set(`painel_4fun_${interaction.guildId}`, { channelId: interaction.channelId, messageId: msgPainel.id });
 
-        return interaction.reply({ content: '✅ Painel do 4Fun fixado com sucesso!', ephemeral: true });
+        return interaction.reply({ content: '✅ Painel do 4Fun fixado e ativado com sucesso!', ephemeral: true });
     }
 
     // Comando /vetarmapa
@@ -370,7 +463,7 @@ client.on('interactionCreate', async interaction => {
 
         const isStaff = interaction.member.roles.cache.has(serverConfig.cargoId) || interaction.member.permissions.has('Administrator');
 
-        // 1. Atualizar Status do Painel 4Fun
+        // 1. Atualizar Status do Painel 4Fun manualmente via botão
         if (customId === '4fun_refresh') {
             await interaction.deferUpdate();
             try {
@@ -397,55 +490,39 @@ client.on('interactionCreate', async interaction => {
                         countPlayers++;
                         const matchName = linhaLimpa.match(/^#\s+\d+\s+"([^"]+)"/);
                         if (matchName) {
-                            listaNomes.push(matchName[1]);
+                            listaNomes.push(`🔹 ${matchName[1]}`);
                         }
                     }
                 });
 
                 const embedAtualizada = new EmbedBuilder()
                     .setTitle('🎮 SERVIDOR CS:MOS - 4FUN')
-                    .setColor('#10b981')
+                    .setColor('#38bdf8')
+                    .setDescription('Painel de monitoramento em tempo real do servidor 4Fun.')
                     .addFields(
                         { name: '🗺️ Mapa Atual', value: `\`${dadosMapa.nome}\``, inline: true },
                         { name: '👥 Jogadores Online', value: `\`${countPlayers}/32\``, inline: true },
-                        { name: '📋 Jogadores Conectados', value: listaNomes.length > 0 ? `\`\`\`text\n${listaNomes.join('\n')}\n\`\`\`` : '_Nenhum jogador online._', inline: false },
+                        { name: '\u200B', value: '\u200B', inline: false },
+                        { name: '📋 Jogadores Conectados', value: listaNomes.length > 0 ? `${listaNomes.join('\n')}` : '_Nenhum jogador online no momento._', inline: false },
                         { name: '📥 Download do Mapa', value: `[📥 Baixar ${dadosMapa.nome}](${dadosMapa.download})`, inline: false }
                     )
-                    .setFooter({ text: 'Apenas moderadores autorizados podem visualizar IPs e comandos administrativos.' })
+                    .setFooter({ text: '🔄 Atualizado com sucesso • Painel Oficial 4Fun' })
                     .setTimestamp();
 
                 await interaction.message.edit({ embeds: [embedAtualizada] });
             } catch (err) {
-                return interaction.followUp({ content: `❌ Erro ao conectar no RCON do 4Fun: ${err.message}`, ephemeral: true });
+                const embedOffline = new EmbedBuilder()
+                    .setTitle('🎮 SERVIDOR CS:MOS - 4FUN [OFFLINE]')
+                    .setColor('#ef4444')
+                    .setDescription('⚠️ **O servidor caiu ou está offline!**\nBasta aguardar o responsável ligar o servidor novamente. As informações voltarão a ser atualizadas automaticamente em breve.')
+                    .setFooter({ text: '🔴 Servidor Inativo' })
+                    .setTimestamp();
+
+                await interaction.message.edit({ embeds: [embedOffline] }).catch(() => {});
             }
         }
 
-        // 2. Ver Jogadores (Somente Staff)
-        if (customId === '4fun_players') {
-            if (!isStaff) {
-                return interaction.reply({ content: '🚫 Apenas membros da Staff autorizados podem ver a lista detalhada de jogadores!', ephemeral: true });
-            }
-
-            await interaction.deferReply({ ephemeral: true });
-            try {
-                const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 3000 });
-                await rcon.connect();
-                const statusResp = await rcon.send('status');
-                await rcon.end();
-
-                const linhas = statusResp.split('\n');
-                const jogadores = linhas
-                    .filter(l => l.trim().startsWith('#') && !l.includes('userid'))
-                    .map(l => l.trim())
-                    .join('\n');
-
-                return interaction.editReply({ content: `👥 **Lista de Jogadores Conectados (Staff):**\n\`\`\`text\n${jogadores || 'Nenhum jogador online.'}\n\`\`\`` });
-            } catch (err) {
-                return interaction.editReply({ content: `❌ Erro ao buscar jogadores: ${err.message}` });
-            }
-        }
-
-        // 3. Menu de Gerenciamento
+        // 2. Menu de Gerenciamento
         if (customId === '4fun_manage') {
             if (!isStaff) {
                 return interaction.reply({ content: '🚫 Apenas administradores/staffs podem usar as funções de moderação do 4Fun!', ephemeral: true });
@@ -460,7 +537,7 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply({ content: '⚙️ Escolha a ação de moderação RCON que deseja realizar:', components: [rowAdmin], ephemeral: true });
         }
 
-        // Sub-botões de Ação Admin (Kick / Ban / Mapa) com SteamID e IP na descrição
+        // Sub-botões de Ação Admin (Kick / Ban / Mapa) com SteamID e IP abaixo do nome de cada um
         if (customId === '4fun_cmd_kick' || customId === '4fun_cmd_ban' || customId === '4fun_cmd_map') {
             if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs.', ephemeral: true });
 
@@ -503,7 +580,7 @@ client.on('interactionCreate', async interaction => {
                             if (options.length < 25) {
                                 options.push({
                                     label: nomePlayer.slice(0, 25),
-                                    description: `Steam: ${steamId} | IP: ${ipPlayer}`.slice(0, 100),
+                                    description: `SteamID: ${steamId} | IP: ${ipPlayer}`.slice(0, 100),
                                     value: userId
                                 });
                             }
