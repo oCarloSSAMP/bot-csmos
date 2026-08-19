@@ -81,7 +81,13 @@ const commands = [
         .setName('vetarmapa')
         .setDescription('Inicia o veto de mapas entre 2 capitães')
         .addUserOption(opt => opt.setName('capitao1').setDescription('Primeiro Capitão').setRequired(true))
-        .addUserOption(opt => opt.setName('capitao2').setDescription('Segundo Capitão').setRequired(true))
+        .addUserOption(opt => opt.setName('capitao2').setDescription('Segundo Capitão').setRequired(true)),
+
+    new SlashCommandBuilder()
+        .setName('enviar-msg')
+        .setDescription('Envia uma mensagem personalizada com um link de imagem/GIF')
+        .addStringOption(opt => opt.setName('mensagem').setDescription('O texto que o bot vai enviar').setRequired(true))
+        .addStringOption(opt => opt.setName('link_gif').setDescription('Cole o link do GIF aqui').setRequired(true))
 ];
 
 const rest = new REST({ version: '10' }).setToken(config.token);
@@ -377,6 +383,25 @@ client.on('interactionCreate', async interaction => {
             bansNoTurnoAtual: 0,
             mapasRestantes: [...POOL_MAPAS]
         });
+    }
+
+    if (commandName === 'enviar-msg') {
+        if (!interaction.member.permissions.has('Administrator')) {
+            return interaction.reply({ content: '🚫 Apenas administradores podem usar este comando.', ephemeral: true });
+        }
+
+        const msgTexto = interaction.options.getString('mensagem');
+        const linkGif = interaction.options.getString('link_gif');
+
+        try {
+            await interaction.channel.send({
+                content: msgTexto,
+                files: [linkGif]
+            });
+            await interaction.reply({ content: '✅ Mensagem enviada com sucesso!', ephemeral: true });
+        } catch (err) {
+            await interaction.reply({ content: `❌ Erro ao enviar mensagem: ${err.message}`, ephemeral: true });
+        }
     }
 });
 
