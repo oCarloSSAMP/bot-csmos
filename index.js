@@ -389,8 +389,17 @@ client.on('interactionCreate', async interaction => {
 
                 const linhas = statusResp.split('\n');
                 let countPlayers = 0;
+                const listaNomes = [];
+
                 linhas.forEach(l => {
-                    if (l.trim().startsWith('#') && !l.includes('userid')) countPlayers++;
+                    const linhaLimpa = l.trim();
+                    if (linhaLimpa.startsWith('#') && !linhaLimpa.includes('userid')) {
+                        countPlayers++;
+                        const matchName = linhaLimpa.match(/^#\s+\d+\s+"([^"]+)"/);
+                        if (matchName) {
+                            listaNomes.push(matchName[1]);
+                        }
+                    }
                 });
 
                 const embedAtualizada = new EmbedBuilder()
@@ -399,6 +408,7 @@ client.on('interactionCreate', async interaction => {
                     .addFields(
                         { name: '🗺️ Mapa Atual', value: `\`${dadosMapa.nome}\``, inline: true },
                         { name: '👥 Jogadores Online', value: `\`${countPlayers}/32\``, inline: true },
+                        { name: '📋 Jogadores Conectados', value: listaNomes.length > 0 ? `\`\`\`text\n${listaNomes.join('\n')}\n\`\`\`` : '_Nenhum jogador online._', inline: false },
                         { name: '📥 Download do Mapa', value: `[📥 Baixar ${dadosMapa.nome}](${dadosMapa.download})`, inline: false }
                     )
                     .setFooter({ text: 'Apenas moderadores autorizados podem visualizar IPs e comandos administrativos.' })
@@ -450,7 +460,7 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply({ content: '⚙️ Escolha a ação de moderação RCON que deseja realizar:', components: [rowAdmin], ephemeral: true });
         }
 
-        // Sub-botões de Ação Admin (Kick / Ban / Mapa) com os mapas exatos atualizados do 4Fun
+        // Sub-botões de Ação Admin (Kick / Ban / Mapa) com SteamID e IP na descrição
         if (customId === '4fun_cmd_kick' || customId === '4fun_cmd_ban' || customId === '4fun_cmd_map') {
             if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs.', ephemeral: true });
 
@@ -481,14 +491,19 @@ client.on('interactionCreate', async interaction => {
                 linhas.forEach(l => {
                     const linhaLimpa = l.trim();
                     if (linhaLimpa.startsWith('#') && !linhaLimpa.includes('userid')) {
-                        const match = linhaLimpa.match(/^#\s+(\d+)\s+"([^"]+)"/);
+                        const match = linhaLimpa.match(/^#\s+(\d+)\s+"([^"]+)"\s+([^\s]+)/);
+                        const ipMatch = linhaLimpa.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+)\b/);
+
                         if (match) {
                             const userId = match[1];
                             const nomePlayer = match[2];
+                            const steamId = match[3];
+                            const ipPlayer = ipMatch ? ipMatch[1] : 'N/A';
+
                             if (options.length < 25) {
                                 options.push({
-                                    label: nomePlayer.slice(0, 50),
-                                    description: `UserID RCON: ${userId}`,
+                                    label: nomePlayer.slice(0, 25),
+                                    description: `Steam: ${steamId} | IP: ${ipPlayer}`.slice(0, 100),
                                     value: userId
                                 });
                             }
