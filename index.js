@@ -8,7 +8,10 @@ const {
     REST, 
     Routes, 
     SlashCommandBuilder,
-    StringSelectMenuBuilder
+    StringSelectMenuBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle
 } = require('discord.js');
 const { Rcon } = require('rcon-client');
 const { QuickDB } = require('quick.db');
@@ -452,8 +455,31 @@ function criarBotoesMapas(mapasDisponiveis, sessaoId, acao, estilo, prefixoRotul
     return rows;
 }
 
-// Gerenciador de cliques nos Botões e Menus
+// Gerenciador de cliques nos Botões, Menus e Modais
 client.on('interactionCreate', async interaction => {
+    // Tratamento de Modais
+    if (interaction.isModalSubmit()) {
+        if (interaction.customId === 'modal_rcon_custom_4fun') {
+            await interaction.deferReply({ ephemeral: true });
+            const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
+            if (!serverConfig) return interaction.editReply({ content: '❌ Servidor 4Fun não configurado.' });
+
+            const comandoDigitado = interaction.fields.getTextInputValue('input_rcon_cmd');
+
+            try {
+                const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 3000 });
+                await rcon.connect();
+                const respostaRcon = await rcon.send(comandoDigitado);
+                await rcon.end();
+
+                return interaction.editReply({ content: `✅ Comando RCON enviado com sucesso!\n\`\`\`text\n${respostaRcon || 'Executado sem retorno.'}\n\`\`\`` });
+            } catch (err) {
+                return interaction.editReply({ content: `❌ Erro RCON: ${err.message}` });
+            }
+        }
+        return;
+    }
+
     if (interaction.isStringSelectMenu()) {
         const customId = interaction.customId;
         if (customId.startsWith('4fun_select_')) {
@@ -591,13 +617,30 @@ client.on('interactionCreate', async interaction => {
                 return interaction.reply({ content: '🚫 Apenas administradores/staffs podem usar as funções de moderação do 4Fun!', ephemeral: true });
             }
 
-            const rowAdmin = new ActionRowBuilder().addComponents(
+            const rowAdmin1 = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('4fun_cmd_map').setLabel('🗺️ Mudar Mapa').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('4fun_cmd_kick').setLabel('👢 Kickar Jogador').setStyle(ButtonStyle.Danger),
                 new ButtonBuilder().setCustomId('4fun_cmd_ban').setLabel('🔨 Banir Jogador').setStyle(ButtonStyle.Danger)
             );
+            const rowAdmin2 = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('4fun_cmd_custom').setLabel('💬 Comando Customizado').setStyle(ButtonStyle.Primary)
+            );
 
-            return interaction.reply({ content: '⚙️ Escolha a ação de moderação RCON que deseja realizar:', components: [rowAdmin], ephemeral: true });
+            return interaction.reply({ content: '⚙️ Escolha a ação de moderação RCON que deseja realizar:', components: [rowAdmin1, rowAdmin2], ephemeral: true });
+        }
+
+        // Abertura do Modal de Comando Customizado do 4Fun
+        if (customId === '4fun_cmd_custom') {
+            if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs.', ephemeral: true });
+            const modal = new ModalBuilder().setCustomId('modal_rcon_custom_4fun').setTitle('💬 Comando RCON Personalizado (4Fun)');
+            const inputComando = new TextInputBuilder()
+                .setCustomId('input_rcon_cmd')
+                .setLabel('Digite o comando RCON exato:')
+                .setPlaceholder('Ex: mp_restartgame 1 ou sv_password abc')
+                .setStyle(TextInputStyle.Short)
+                .setRequired(true);
+            modal.addComponents(new ActionRowBuilder().addComponents(inputComando));
+            return await interaction.showModal(modal);
         }
 
         // Sub-botões de Ação Admin (Kick / Ban / Mapa)
