@@ -8,7 +8,10 @@ const {
     REST, 
     Routes, 
     SlashCommandBuilder,
-    StringSelectMenuBuilder
+    StringSelectMenuBuilder,
+    ModalBuilder,
+    TextInputBuilder,
+    TextInputStyle
 } = require('discord.js');
 const { Rcon } = require('rcon-client');
 const { QuickDB } = require('quick.db');
@@ -93,7 +96,7 @@ const commands = [
 const rest = new REST({ version: '10' }).setToken(config.token);
 
 client.once('ready', async () => {
-    console.log(`✅ Bot CSMOS online como ${client.user.tag}`);
+    console.log(`✅ Bot CSMOS online como ${client.user.tag}`[cite: 2]);
     try {
         for (const guild of client.guilds.cache.values()) {
             await rest.put(
@@ -103,7 +106,7 @@ client.once('ready', async () => {
             agendarProximaChecagemInatividade(guild);
             iniciarLoopPainel4Fun(guild);
         }
-        console.log('✅ Comandos / atualizados instantaneamente no servidor!');
+        console.log('✅ Comandos / atualizados instantaneamente no servidor!'[cite: 2]);
     } catch (error) {
         console.error('❌ Erro ao registrar comandos:', error);
     }
@@ -284,6 +287,29 @@ function iniciarLoopPainel4Fun(guild) {
 
 // Interação dos Comandos Slash (/)
 client.on('interactionCreate', async interaction => {
+    // Tratamento de Modais (Comando Customizado)
+    if (interaction.isModalSubmit()) {
+        if (interaction.customId === 'modal_rcon_custom') {
+            const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
+            if (!serverConfig) return interaction.reply({ content: '❌ Servidor 4Fun não configurado.'[cite: 2], ephemeral: true });
+
+            const comandoDigitado = interaction.fields.getTextInputValue('input_rcon_cmd');
+
+            await interaction.deferReply({ ephemeral: true });
+            try {
+                const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 3000 });
+                await rcon.connect();
+                const respostaRcon = await rcon.send(comandoDigitado);
+                await rcon.end();
+
+                return interaction.editReply({ content: `✅ Comando enviado com sucesso!\n\`\`\`text\n${respostaRcon || 'Comando executado sem retorno de texto.'}\n\`\`\`` });
+            } catch (err) {
+                return interaction.editReply({ content: `❌ Erro ao enviar comando RCON: ${err.message}` });
+            }
+        }
+        return;
+    }
+
     if (!interaction.isChatInputCommand()) return;
 
     const { commandName, guildId, channelId } = interaction;
@@ -304,7 +330,7 @@ client.on('interactionCreate', async interaction => {
         });
 
         await interaction.reply({
-            content: `✅ Servidor RCON e Cargos configurados com sucesso!\n**IP:** \`${ip}:${porta}\` | **Staff Autorizado:** ${cargoStaff} | **Cargo Mencionado:** ${cargoMencao}`,
+            content: `✅ Servidor RCON e Cargos configurados com sucesso!\n**IP:** \`${ip}:${porta}\` | **Staff Autorizado:** ${cargoStaff} | **Cargo Mencionado:** ${cargoMencao}`[cite: 2],
             ephemeral: true
         });
     }
@@ -323,7 +349,7 @@ client.on('interactionCreate', async interaction => {
         });
 
         return interaction.reply({
-            content: `✅ Servidor 4Fun configurado com sucesso!\n**IP:** \`${ip}:${porta}\` | **Staff Autorizado:** ${cargoStaff}`,
+            content: `✅ Servidor 4Fun configurado com sucesso!\n**IP:** \`${ip}:${porta}\` | **Staff Autorizado:** ${cargoStaff}`[cite: 2],
             ephemeral: true
         });
     }
@@ -331,7 +357,7 @@ client.on('interactionCreate', async interaction => {
     if (commandName === 'painel-4fun') {
         const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
         if (!serverConfig) {
-            return interaction.reply({ content: '❌ Configure o servidor primeiro usando o comando `/config-4fun`.', ephemeral: true });
+            return interaction.reply({ content: '❌ Configure o servidor primeiro usando o comando `/config-4fun`.'[cite: 2], ephemeral: true });
         }
 
         const embedPainel = new EmbedBuilder()
@@ -348,7 +374,7 @@ client.on('interactionCreate', async interaction => {
         const msgPainel = await interaction.channel.send({ embeds: [embedPainel], components: [rowBotoes] });
         await db.set(`painel_4fun_${interaction.guildId}`, { channelId: interaction.channelId, messageId: msgPainel.id });
 
-        return interaction.reply({ content: '✅ Painel do 4Fun fixado e ativado com sucesso!', ephemeral: true });
+        return interaction.reply({ content: '✅ Painel do 4Fun fixado e ativado com sucesso!'[cite: 2], ephemeral: true });
     }
 
     if (commandName === 'vetarmapa') {
@@ -413,7 +439,7 @@ client.on('interactionCreate', async interaction => {
             if (linkGif) payload.files = [linkGif];
 
             await interaction.channel.send(payload);
-            await interaction.reply({ content: '✅ Mensagem enviada com sucesso!', ephemeral: true });
+            await interaction.reply({ content: '✅ Mensagem enviada com sucesso!'[cite: 2], ephemeral: true });
         } catch (err) {
             await interaction.reply({ content: `❌ Erro ao enviar mensagem: ${err.message}`, ephemeral: true });
         }
@@ -458,10 +484,10 @@ client.on('interactionCreate', async interaction => {
         const customId = interaction.customId;
         if (customId.startsWith('4fun_select_')) {
             const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
-            if (!serverConfig) return interaction.reply({ content: '❌ Servidor 4Fun não configurado.', ephemeral: true });
+            if (!serverConfig) return interaction.reply({ content: '❌ Servidor 4Fun não configurado.'[cite: 2], ephemeral: true });
 
             const isStaff = interaction.member.roles.cache.has(serverConfig.cargoId) || interaction.member.permissions.has('Administrator');
-            if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs autorizados!', ephemeral: true });
+            if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs autorizados!'[cite: 2], ephemeral: true });
 
             const acao = customId.replace('4fun_select_', '');
             const valorEscolhido = interaction.values[0];
@@ -490,7 +516,8 @@ client.on('interactionCreate', async interaction => {
 
                     if (ipParaBanir) {
                         await rcon.send(`addip 30 ${ipParaBanir}`);
-                        respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Você foi banido do servidor por um staff."\nwriteip`);
+                        await rcon.send('writeip');
+                        respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Você foi banido do servidor por um staff."`);
                     } else {
                         respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Banido por um staff."`);
                     }
@@ -499,7 +526,7 @@ client.on('interactionCreate', async interaction => {
                 }
 
                 await rcon.end();
-                return interaction.editReply({ content: `✅ Ação executada com sucesso!\n\`\`\`text\n${respostaRcon || 'Comando enviado.'}\n\`\`\`` });
+                return interaction.editReply({ content: `✅ Ação executada com sucesso!\n\`\`\`text\n${respostaRcon || 'Comando enviado.'}\n\`\`\``[cite: 2] });
             } catch (err) {
                 return interaction.editReply({ content: `❌ Erro ao executar comando RCON: ${err.message}` });
             }
@@ -515,7 +542,7 @@ client.on('interactionCreate', async interaction => {
     if (customId.startsWith('4fun_')) {
         const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
         if (!serverConfig) {
-            return interaction.reply({ content: '❌ Servidor 4Fun não configurado.', ephemeral: true });
+            return interaction.reply({ content: '❌ Servidor 4Fun não configurado.'[cite: 2], ephemeral: true });
         }
 
         const isStaff = interaction.member.roles.cache.has(serverConfig.cargoId) || interaction.member.permissions.has('Administrator');
@@ -588,21 +615,44 @@ client.on('interactionCreate', async interaction => {
         // 2. Menu de Gerenciamento
         if (customId === '4fun_manage') {
             if (!isStaff) {
-                return interaction.reply({ content: '🚫 Apenas administradores/staffs podem usar as funções de moderação do 4Fun!', ephemeral: true });
+                return interaction.reply({ content: '🚫 Apenas administradores/staffs podem usar as funções de moderação do 4Fun!'[cite: 2], ephemeral: true });
             }
 
-            const rowAdmin = new ActionRowBuilder().addComponents(
+            const rowAdmin1 = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('4fun_cmd_map').setLabel('🗺️ Mudar Mapa').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('4fun_cmd_kick').setLabel('👢 Kickar Jogador').setStyle(ButtonStyle.Danger),
                 new ButtonBuilder().setCustomId('4fun_cmd_ban').setLabel('🔨 Banir Jogador').setStyle(ButtonStyle.Danger)
             );
 
-            return interaction.reply({ content: '⚙️ Escolha a ação de moderação RCON que deseja realizar:', components: [rowAdmin], ephemeral: true });
+            const rowAdmin2 = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('4fun_cmd_custom').setLabel('💬 Comando Customizado').setStyle(ButtonStyle.Primary)
+            );
+
+            return interaction.reply({ content: '⚙️ Escolha a ação de moderação RCON que deseja realizar:'[cite: 2], components: [rowAdmin1, rowAdmin2], ephemeral: true });
+        }
+
+        // Abrir Modal para Comando Personalizado
+        if (customId === '4fun_cmd_custom') {
+            if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs.'[cite: 2], ephemeral: true });
+
+            const modal = new ModalBuilder()
+                .setCustomId('modal_rcon_custom')
+                .setTitle('💬 Enviar Comando RCON Personalizado');
+
+            const inputComando = new TextInputBuilder()
+                .setCustomId('input_rcon_cmd')
+                .setLabel('Digite o comando RCON exato:')
+                .setPlaceholder('Ex: mp_restartgame 1 ou sv_password abc')
+                .setStyle(TextInputStyle.Short)
+                .setRequired(true);
+
+            modal.addComponents(new ActionRowBuilder().addComponents(inputComando));
+            return await interaction.showModal(modal);
         }
 
         // Sub-botões de Ação Admin (Kick / Ban / Mapa)
         if (customId === '4fun_cmd_kick' || customId === '4fun_cmd_ban' || customId === '4fun_cmd_map') {
-            if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs.', ephemeral: true });
+            if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs.'[cite: 2], ephemeral: true });
 
             await interaction.deferReply({ ephemeral: true });
             try {
