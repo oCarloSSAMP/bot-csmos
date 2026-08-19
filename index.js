@@ -233,8 +233,11 @@ function iniciarLoopPainel4Fun(guild) {
                     { name: '🗺️ Mapa Atual', value: `\`${dadosMapa.nome}\``, inline: true },
                     { name: '👥 Jogadores Online', value: `\`${countPlayers}/32\``, inline: true },
                     { name: '📋 Jogadores Conectados', value: listaNomes.length > 0 ? `${listaNomes.join('\n')}` : '_Nenhum jogador online no momento._', inline: false },
+                    { name: '\u200B', value: '\u200B', inline: false },
                     { name: '📥 Download do Mapa', value: `[📥 Baixar ${dadosMapa.nome}](${dadosMapa.download})`, inline: false },
+                    { name: '\u200B', value: '\u200B', inline: false },
                     { name: '🇧🇷 CONECTAR DIRETO NO SERVIDOR\nCaso o servidor não apareça na lista do jogo, abra o console do jogo (`), copie o comando abaixo, cole lá dentro e aperte Enter para entrar.', value: `\`${comandoConnectFormatado}\``, inline: false },
+                    { name: '\u200B', value: '\u200B', inline: false },
                     { name: '🇺🇸 CONNECT DIRECTLY TO THE SERVER\nIf the server does not appear in your game list, open your in-game console (`), copy the command below, paste it inside, and press Enter to join.', value: `\`${comandoConnectFormatado}\``, inline: false }
                 )
                 .setFooter({ text: '🔄 Atualizado automaticamente a cada 1 minuto • Painel Oficial 4Fun' })
@@ -508,8 +511,11 @@ client.on('interactionCreate', async interaction => {
                         { name: '🗺️ Mapa Atual', value: `\`${dadosMapa.nome}\``, inline: true },
                         { name: '👥 Jogadores Online', value: `\`${countPlayers}/32\``, inline: true },
                         { name: '📋 Jogadores Conectados', value: listaNomes.length > 0 ? `${listaNomes.join('\n')}` : '_Nenhum jogador online no momento._', inline: false },
+                        { name: '\u200B', value: '\u200B', inline: false },
                         { name: '📥 Download do Mapa', value: `[📥 Baixar ${dadosMapa.nome}](${dadosMapa.download})`, inline: false },
+                        { name: '\u200B', value: '\u200B', inline: false },
                         { name: '🇧🇷 CONECTAR DIRETO NO SERVIDOR\nCaso o servidor não apareça na lista do jogo, abra o console do jogo (`), copie o comando abaixo, cole lá dentro e aperte Enter para entrar.', value: `\`${comandoConnectFormatado}\``, inline: false },
+                        { name: '\u200B', value: '\u200B', inline: false },
                         { name: '🇺🇸 CONNECT DIRECTLY TO THE SERVER\nIf the server does not appear in your game list, open your in-game console (`), copy the command below, paste it inside, and press Enter to join.', value: `\`${comandoConnectFormatado}\``, inline: false }
                     )
                     .setFooter({ text: '🔄 Atualizado com sucesso • Painel Oficial 4Fun' })
