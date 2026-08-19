@@ -93,7 +93,7 @@ const commands = [
 const rest = new REST({ version: '10' }).setToken(config.token);
 
 client.once('ready', async () => {
-    console.log(`✅ Bot CSMOS online como ${client.user.tag}`);
+    console.log(`✅ Bot CSMOS online como ${client.user.tag}[cite: 2]`);
     try {
         for (const guild of client.guilds.cache.values()) {
             await rest.put(
@@ -103,7 +103,7 @@ client.once('ready', async () => {
             agendarProximaChecagemInatividade(guild);
             iniciarLoopPainel4Fun(guild);
         }
-        console.log('✅ Comandos / atualizados instantaneamente no servidor!');
+        console.log('✅ Comandos / atualizados instantaneamente no servidor![cite: 2]');
     } catch (error) {
         console.error('❌ Erro ao registrar comandos:', error);
     }
@@ -304,7 +304,7 @@ client.on('interactionCreate', async interaction => {
         });
 
         await interaction.reply({
-            content: `✅ Servidor RCON e Cargos configurados com sucesso!\n**IP:** \`${ip}:${porta}\` | **Staff Autorizado:** ${cargoStaff} | **Cargo Mencionado:** ${cargoMencao}`,
+            content: `✅ Servidor RCON e Cargos configurados com sucesso!\n**IP:** \`${ip}:${porta}\` | **Staff Autorizado:** ${cargoStaff} | **Cargo Mencionado:** ${cargoMencao}[cite: 2]`,
             ephemeral: true
         });
     }
@@ -323,7 +323,7 @@ client.on('interactionCreate', async interaction => {
         });
 
         return interaction.reply({
-            content: `✅ Servidor 4Fun configurado com sucesso!\n**IP:** \`${ip}:${porta}\` | **Staff Autorizado:** ${cargoStaff}`,
+            content: `✅ Servidor 4Fun configurado com sucesso!\n**IP:** \`${ip}:${porta}\` | **Staff Autorizado:** ${cargoStaff}[cite: 2]`,
             ephemeral: true
         });
     }
@@ -331,7 +331,7 @@ client.on('interactionCreate', async interaction => {
     if (commandName === 'painel-4fun') {
         const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
         if (!serverConfig) {
-            return interaction.reply({ content: '❌ Configure o servidor primeiro usando o comando `/config-4fun`.', ephemeral: true });
+            return interaction.reply({ content: '❌ Configure o servidor primeiro usando o comando `/config-4fun`.[cite: 2]', ephemeral: true });
         }
 
         const embedPainel = new EmbedBuilder()
@@ -348,7 +348,7 @@ client.on('interactionCreate', async interaction => {
         const msgPainel = await interaction.channel.send({ embeds: [embedPainel], components: [rowBotoes] });
         await db.set(`painel_4fun_${interaction.guildId}`, { channelId: interaction.channelId, messageId: msgPainel.id });
 
-        return interaction.reply({ content: '✅ Painel do 4Fun fixado e ativado com sucesso!', ephemeral: true });
+        return interaction.reply({ content: '✅ Painel do 4Fun fixado e ativado com sucesso![cite: 2]', ephemeral: true });
     }
 
     if (commandName === 'vetarmapa') {
@@ -413,7 +413,7 @@ client.on('interactionCreate', async interaction => {
             if (linkGif) payload.files = [linkGif];
 
             await interaction.channel.send(payload);
-            await interaction.reply({ content: '✅ Mensagem enviada com sucesso!', ephemeral: true });
+            await interaction.reply({ content: '✅ Mensagem enviada com sucesso![cite: 2]', ephemeral: true });
         } catch (err) {
             await interaction.reply({ content: `❌ Erro ao enviar mensagem: ${err.message}`, ephemeral: true });
         }
@@ -458,10 +458,10 @@ client.on('interactionCreate', async interaction => {
         const customId = interaction.customId;
         if (customId.startsWith('4fun_select_')) {
             const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
-            if (!serverConfig) return interaction.reply({ content: '❌ Servidor 4Fun não configurado.', ephemeral: true });
+            if (!serverConfig) return interaction.reply({ content: '❌ Servidor 4Fun não configurado.[cite: 2]', ephemeral: true });
 
             const isStaff = interaction.member.roles.cache.has(serverConfig.cargoId) || interaction.member.permissions.has('Administrator');
-            if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs autorizados!', ephemeral: true });
+            if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs autorizados![cite: 2]', ephemeral: true });
 
             const acao = customId.replace('4fun_select_', '');
             const valorEscolhido = interaction.values[0];
@@ -475,13 +475,15 @@ client.on('interactionCreate', async interaction => {
                 if (acao === 'kick') {
                     respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Você foi kickado do servidor 4Fun por um staff."`);
                 } else if (acao === 'ban') {
+                    await rcon.send('sv_lan 0');
                     respostaRcon = await rcon.send(`banid 30 ${valorEscolhido} kick; writeid`);
+                    await rcon.send('sv_lan 1');
                 } else if (acao === 'map') {
                     respostaRcon = await rcon.send(`changelevel ${valorEscolhido}`);
                 }
 
                 await rcon.end();
-                return interaction.editReply({ content: `✅ Ação executada com sucesso!\n\`\`\`text\n${respostaRcon || 'Comando enviado.'}\n\`\`\`` });
+                return interaction.editReply({ content: `✅ Ação executada com sucesso!\n\`\`\`text\n${respostaRcon || 'Comando enviado.'}\n\`\`\`[cite: 2]` });
             } catch (err) {
                 return interaction.editReply({ content: `❌ Erro ao executar comando RCON: ${err.message}` });
             }
@@ -497,7 +499,7 @@ client.on('interactionCreate', async interaction => {
     if (customId.startsWith('4fun_')) {
         const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
         if (!serverConfig) {
-            return interaction.reply({ content: '❌ Servidor 4Fun não configurado.', ephemeral: true });
+            return interaction.reply({ content: '❌ Servidor 4Fun não configurado.[cite: 2]', ephemeral: true });
         }
 
         const isStaff = interaction.member.roles.cache.has(serverConfig.cargoId) || interaction.member.permissions.has('Administrator');
@@ -570,7 +572,7 @@ client.on('interactionCreate', async interaction => {
         // 2. Menu de Gerenciamento
         if (customId === '4fun_manage') {
             if (!isStaff) {
-                return interaction.reply({ content: '🚫 Apenas administradores/staffs podem usar as funções de moderação do 4Fun!', ephemeral: true });
+                return interaction.reply({ content: '🚫 Apenas administradores/staffs podem usar as funções de moderação do 4Fun![cite: 2]', ephemeral: true });
             }
 
             const rowAdmin = new ActionRowBuilder().addComponents(
@@ -579,12 +581,12 @@ client.on('interactionCreate', async interaction => {
                 new ButtonBuilder().setCustomId('4fun_cmd_ban').setLabel('🔨 Banir Jogador').setStyle(ButtonStyle.Danger)
             );
 
-            return interaction.reply({ content: '⚙️ Escolha a ação de moderação RCON que deseja realizar:', components: [rowAdmin], ephemeral: true });
+            return interaction.reply({ content: '⚙️ Escolha a ação de moderação RCON que deseja realizar:[cite: 2]', components: [rowAdmin], ephemeral: true });
         }
 
         // Sub-botões de Ação Admin (Kick / Ban / Mapa)
         if (customId === '4fun_cmd_kick' || customId === '4fun_cmd_ban' || customId === '4fun_cmd_map') {
-            if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs.', ephemeral: true });
+            if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs.[cite: 2]', ephemeral: true });
 
             await interaction.deferReply({ ephemeral: true });
             try {
