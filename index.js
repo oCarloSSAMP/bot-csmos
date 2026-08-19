@@ -43,9 +43,9 @@ const POOL_MAPAS = [
     { id: 'Anubis_cs2mix', nome: 'Anubis', download: 'https://www.mediafire.com/file/bglr6dgt3c5nw13/MAPA+ANUBIS.zip/file' }
 ];
 
-// Mapas específicos do 4Fun atualizados com os comandos exatos e links corretos
+// Mapas específicos do 4Fun atualizados com os nomes e links corretos informados
 const MAPAS_4FUN = {
-    'de_dust2_fps': { nome: 'Dust2 4Fun', download: 'https://www.mediafire.com/file/abs6m2rretk03xt/MAPA+DUST2FPS+4FUN.zip/file' },
+    'de_dust2_fps': { nome: 'Dust2 4Fun', download: 'https://www.mediafire.com/file/abs6m2rretk03xt/MAPA_DUST2FPS_4FUN.zip/file' },
     'de_mirage_csgo_v2': { nome: 'Mirage 4Fun', download: 'https://www.mediafire.com/file/7wldyhc5rcd1tnh/MAPA+MIRAGE+4FUN.zip/file' },
     'de_inferno_csgo_cssold_fix': { nome: 'Inferno 4Fun', download: 'https://www.mediafire.com/file/ksjjrwprcriog6n/MAPA+INFERNO.zip/file' }
 };
@@ -450,7 +450,7 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply({ content: '⚙️ Escolha a ação de moderação RCON que deseja realizar:', components: [rowAdmin], ephemeral: true });
         }
 
-        // Sub-botões de Ação Admin (Kick / Ban / Mapa) com os mapas certos do 4Fun
+        // Sub-botões de Ação Admin (Kick / Ban / Mapa) com os mapas exatos atualizados do 4Fun
         if (customId === '4fun_cmd_kick' || customId === '4fun_cmd_ban' || customId === '4fun_cmd_map') {
             if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs.', ephemeral: true });
 
@@ -796,7 +796,7 @@ client.on('interactionCreate', async interaction => {
                 await interaction.editReply({ content: '⏸️ Comando **exec pause** enviado!' });
             } else if (customId === 'rcon_unpause') {
                 await executarRCON(interaction.guildId, 'exec unpause');
-                await interaction.editRegistry?.() || await interaction.editReply({ content: '▶️ Comando **exec unpause** enviado!' });
+                await interaction.editReply({ content: '▶️ Comando **exec unpause** enviado!' });
             }
         } catch (error) {
             await interaction.editReply({ content: `❌ Erro ao enviar RCON: ${error.message}` });
