@@ -249,7 +249,6 @@ function iniciarLoopPainel4Fun(guild) {
 
             await message.edit({ embeds: [embedAtualizada], components: [rowBotoes] }).catch(() => {});
         } catch (err) {
-            // Servidor caiu ou offline
             try {
                 const painelInfo = await db.get(`painel_4fun_${guild.id}`);
                 if (!painelInfo) return;
@@ -283,7 +282,6 @@ client.on('interactionCreate', async interaction => {
 
     const { commandName, guildId, channelId } = interaction;
 
-    // Comando /config-rcon
     if (commandName === 'config-rcon') {
         const ip = interaction.options.getString('ip');
         const porta = interaction.options.getString('porta');
@@ -305,7 +303,6 @@ client.on('interactionCreate', async interaction => {
         });
     }
 
-    // Comando /config-4fun
     if (commandName === 'config-4fun') {
         const ip = interaction.options.getString('ip');
         const porta = interaction.options.getString('porta');
@@ -325,7 +322,6 @@ client.on('interactionCreate', async interaction => {
         });
     }
 
-    // Comando /painel-4fun
     if (commandName === 'painel-4fun') {
         const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
         if (!serverConfig) {
@@ -349,7 +345,6 @@ client.on('interactionCreate', async interaction => {
         return interaction.reply({ content: '✅ Painel do 4Fun fixado e ativado com sucesso!', ephemeral: true });
     }
 
-    // Comando /vetarmapa
     if (commandName === 'vetarmapa') {
         const cap1 = interaction.options.getUser('capitao1');
         const cap2 = interaction.options.getUser('capitao2');
@@ -419,7 +414,6 @@ function criarBotoesMapas(mapasDisponiveis, sessaoId, acao, estilo, prefixoRotul
 
 // Gerenciador de cliques nos Botões e Menus
 client.on('interactionCreate', async interaction => {
-    // 1. Tratar Select Menus (para Kick, Ban e Mudar Mapa do 4Fun)
     if (interaction.isStringSelectMenu()) {
         const customId = interaction.customId;
         if (customId.startsWith('4fun_select_')) {
@@ -468,9 +462,9 @@ client.on('interactionCreate', async interaction => {
 
         const isStaff = interaction.member.roles.cache.has(serverConfig.cargoId) || interaction.member.permissions.has('Administrator');
 
-        // 1. Atualizar Status do Painel 4Fun manualmente via botão
+        // 1. Atualizar Status do Painel 4Fun manualmente via botão (Com deferUpdate seguro)
         if (customId === '4fun_refresh') {
-            await interaction.deferUpdate();
+            await interaction.deferUpdate().catch(() => {});
             try {
                 const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 3000 });
                 await rcon.connect();
@@ -503,23 +497,23 @@ client.on('interactionCreate', async interaction => {
                 const comandoConnectFormatado = `connect ${serverConfig.ip}:${serverConfig.porta}`;
 
                 const embedAtualizada = new EmbedBuilder()
-                .setTitle('🎮 SERVIDOR CS:MOS - 4FUN')
-                .setColor('#38bdf8')
-                .setDescription('Painel de monitoramento em tempo real do servidor 4Fun.')
-                .addFields(
-                    { name: '🗺️ Mapa Atual', value: `\`${dadosMapa.nome}\``, inline: true },
-                    { name: '👥 Jogadores Online', value: `\`${countPlayers}/32\``, inline: true },
-                    { name: '📋 Jogadores Conectados', value: listaNomes.length > 0 ? `${listaNomes.join('\n')}` : '_Nenhum jogador online no momento._', inline: false },
-                    { name: '\u200B', value: '\u200B', inline: false },
-                    { name: '📥 Download do Mapa', value: `[📥 Baixar ${dadosMapa.nome}](${dadosMapa.download})`, inline: false },
-                    { name: '\u200B', value: '\u200B', inline: false },
-                    { name: '🇧🇷 CONECTAR DIRETO NO SERVIDOR\nCaso o servidor não apareça na lista do jogo, abra o console do jogo (`), copie o comando abaixo, cole lá dentro e aperte Enter para entrar.', value: `\`${comandoConnectFormatado}\``, inline: false },
-                    { name: '🇺🇸 CONNECT DIRECTLY TO THE SERVER\nIf the server does not appear in your game list, open your in-game console (`), copy the command below, paste it inside, and press Enter to join.', value: `\`${comandoConnectFormatado}\``, inline: false }
-                )
-                .setFooter({ text: '🔄 Atualizado automaticamente a cada 1 minuto • Painel Oficial 4Fun' })
-                .setTimestamp();
+                    .setTitle('🎮 SERVIDOR CS:MOS - 4FUN')
+                    .setColor('#38bdf8')
+                    .setDescription('Painel de monitoramento em tempo real do servidor 4Fun.')
+                    .addFields(
+                        { name: '🗺️ Mapa Atual', value: `\`${dadosMapa.nome}\``, inline: true },
+                        { name: '👥 Jogadores Online', value: `\`${countPlayers}/32\``, inline: true },
+                        { name: '📋 Jogadores Conectados', value: listaNomes.length > 0 ? `${listaNomes.join('\n')}` : '_Nenhum jogador online no momento._', inline: false },
+                        { name: '\u200B', value: '\u200B', inline: false },
+                        { name: '📥 Download do Mapa', value: `[📥 Baixar ${dadosMapa.nome}](${dadosMapa.download})`, inline: false },
+                        { name: '\u200B', value: '\u200B', inline: false },
+                        { name: '🇧🇷 CONECTAR DIRETO NO SERVIDOR\nCaso o servidor não apareça na lista do jogo, abra o console do jogo (`), copie o comando abaixo, cole lá dentro e aperte Enter para entrar.', value: `\`${comandoConnectFormatado}\``, inline: false },
+                        { name: '🇺🇸 CONNECT DIRECTLY TO THE SERVER\nIf the server does not appear in your game list, open your in-game console (`), copy the command below, paste it inside, and press Enter to join.', value: `\`${comandoConnectFormatado}\``, inline: false }
+                    )
+                    .setFooter({ text: '🔄 Atualizado com sucesso • Painel Oficial 4Fun' })
+                    .setTimestamp();
 
-                await interaction.message.edit({ embeds: [embedAtualizada] });
+                await interaction.message.edit({ embeds: [embedAtualizada] }).catch(() => {});
             } catch (err) {
                 const embedOffline = new EmbedBuilder()
                     .setTitle('🎮 SERVIDOR CS:MOS - 4FUN [OFFLINE]')
@@ -530,6 +524,7 @@ client.on('interactionCreate', async interaction => {
 
                 await interaction.message.edit({ embeds: [embedOffline] }).catch(() => {});
             }
+            return;
         }
 
         // 2. Menu de Gerenciamento
@@ -547,7 +542,7 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply({ content: '⚙️ Escolha a ação de moderação RCON que deseja realizar:', components: [rowAdmin], ephemeral: true });
         }
 
-        // Sub-botões de Ação Admin (Kick / Ban / Mapa) com SteamID e IP abaixo do nome de cada um
+        // Sub-botões de Ação Admin (Kick / Ban / Mapa)
         if (customId === '4fun_cmd_kick' || customId === '4fun_cmd_ban' || customId === '4fun_cmd_map') {
             if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs.', ephemeral: true });
 
