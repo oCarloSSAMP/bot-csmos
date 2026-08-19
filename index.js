@@ -8,10 +8,7 @@ const {
     REST, 
     Routes, 
     SlashCommandBuilder,
-    StringSelectMenuBuilder,
-    ModalBuilder,
-    TextInputBuilder,
-    TextInputStyle
+    StringSelectMenuBuilder
 } = require('discord.js');
 const { Rcon } = require('rcon-client');
 const { QuickDB } = require('quick.db');
@@ -112,7 +109,7 @@ client.once('ready', async () => {
     }
 });
 
-// Execução de comandos via RCON com timeout otimizado
+// Execução de comandos via RCON
 async function executarRCON(guildId, comando) {
     const serverConfig = await db.get(`rcon_${guildId}`);
     if (!serverConfig) {
@@ -123,7 +120,7 @@ async function executarRCON(guildId, comando) {
         host: serverConfig.ip,
         port: parseInt(serverConfig.porta),
         password: serverConfig.senha,
-        timeout: 2000
+        timeout: 3000
     });
 
     await rcon.connect();
@@ -138,13 +135,16 @@ client.on('messageCreate', async message => {
 
     const channelId = message.channel.id;
 
+    // 1. Mover Painel de VETO ativo
     for (const [sessaoId, sessao] of vetosAtivos.entries()) {
         if (sessao.channelId === channelId && !sessao.processando) {
             sessao.processando = true;
             try {
                 if (sessao.lastMessageId) {
                     const msgAntiga = await message.channel.messages.fetch(sessao.lastMessageId).catch(() => {});
-                    if (msgAntiga) await msgAntiga.delete().catch(() => {});
+                    if (msgAntiga) {
+                        await msgAntiga.delete().catch(() => {});
+                    }
                 }
                 const novaMsg = await message.channel.send({
                     embeds: [sessao.latestEmbed],
@@ -152,7 +152,7 @@ client.on('messageCreate', async message => {
                 });
                 sessao.lastMessageId = novaMsg.id;
             } catch (err) {
-                console.error('❌ Erro ao mover veto:', err.message);
+                console.error('❌ Erro ao mover veto para o rodapé:', err.message);
             } finally {
                 sessao.processando = false;
             }
@@ -160,13 +160,16 @@ client.on('messageCreate', async message => {
         }
     }
 
+    // 2. Mover Painel RCON (Anúncio do Mapa em Embed) ativo
     const painel = paineisAtivos.get(channelId);
     if (painel && !painel.processando) {
         painel.processando = true;
         try {
             if (painel.lastMessageId) {
                 const msgAntiga = await message.channel.messages.fetch(painel.lastMessageId).catch(() => {});
-                if (msgAntiga) await msgAntiga.delete().catch(() => {});
+                if (msgAntiga) {
+                    await msgAntiga.delete().catch(() => {});
+                }
             }
             const novaMsg = await message.channel.send({
                 content: painel.content,
@@ -175,7 +178,7 @@ client.on('messageCreate', async message => {
             });
             painel.lastMessageId = novaMsg.id;
         } catch (err) {
-            console.error('❌ Erro ao mover painel RCON:', err.message);
+            console.error('❌ Erro ao mover painel RCON para o rodapé:', err.message);
         } finally {
             painel.processando = false;
         }
@@ -198,7 +201,7 @@ function iniciarLoopPainel4Fun(guild) {
             const serverConfig = await db.get(`rcon_${guild.id}_4fun`);
             if (!serverConfig) return;
 
-            const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 2000 });
+            const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 3000 });
             await rcon.connect();
             const statusResp = await rcon.send('status');
             await rcon.end();
@@ -220,7 +223,9 @@ function iniciarLoopPainel4Fun(guild) {
                 if (linhaLimpa.startsWith('#') && !linhaLimpa.includes('userid')) {
                     countPlayers++;
                     const matchName = linhaLimpa.match(/^#\s+\d+\s+"([^"]+)"/);
-                    if (matchName) listaNomes.push(`🔹 ${matchName[1]}`);
+                    if (matchName) {
+                        listaNomes.push(`🔹 ${matchName[1]}`);
+                    }
                 }
             });
 
@@ -249,140 +254,221 @@ function iniciarLoopPainel4Fun(guild) {
             );
 
             await message.edit({ embeds: [embedAtualizada], components: [rowBotoes] }).catch(() => {});
-        } catch (err) {}
+        } catch (err) {
+            try {
+                const painelInfo = await db.get(`painel_4fun_${guild.id}`);
+                if (!painelInfo) return;
+
+                const channel = guild.channels.cache.get(painelInfo.channelId);
+                if (!channel) return;
+
+                const message = await channel.messages.fetch(painelInfo.messageId).catch(() => {});
+                if (!message) return;
+
+                const embedOffline = new EmbedBuilder()
+                    .setTitle('🎮 SERVIDOR CS:MOS - 4FUN [OFFLINE]')
+                    .setColor('#ef4444')
+                    .setDescription('⚠️ **O servidor caiu ou está offline!**\nBasta aguardar o responsável ligar o servidor novamente. As informações voltarão a ser atualizadas automaticamente em breve.')
+                    .setFooter({ text: '🔴 Servidor Inativo • Tentando reconectar...' })
+                    .setTimestamp();
+
+                const rowBotoes = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('4fun_refresh').setLabel('🔄 Tentar Reconectar').setStyle(ButtonStyle.Secondary)
+                );
+
+                await message.edit({ embeds: [embedOffline], components: [rowBotoes] }).catch(() => {});
+            } catch (e) {}
+        }
     }, 60 * 1000);
 }
 
-// Tratamento de Interações
+// Interação dos Comandos Slash (/)
 client.on('interactionCreate', async interaction => {
-    // 1. Modais
-    if (interaction.isModalSubmit()) {
-        if (interaction.customId === 'modal_rcon_custom') {
-            await interaction.deferReply({ ephemeral: true });
-            const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
-            if (!serverConfig) return interaction.editReply({ content: '❌ Servidor 4Fun não configurado.' });
+    if (!interaction.isChatInputCommand()) return;
 
-            const comandoDigitado = interaction.fields.getTextInputValue('input_rcon_cmd');
+    const { commandName, guildId, channelId } = interaction;
 
-            try {
-                const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 2000 });
-                await rcon.connect();
-                const respostaRcon = await rcon.send(comandoDigitado);
-                await rcon.end();
+    if (commandName === 'config-rcon') {
+        const ip = interaction.options.getString('ip');
+        const porta = interaction.options.getString('porta');
+        const senha = interaction.options.getString('senha');
+        const cargoStaff = interaction.options.getRole('cargo_staff');
+        const cargoMencao = interaction.options.getRole('cargo_mencao');
 
-                return interaction.editReply({ content: `✅ Comando enviado com sucesso!\n\`\`\`text\n${respostaRcon || 'Executado sem retorno.'}\n\`\`\`` });
-            } catch (err) {
-                return interaction.editReply({ content: `❌ Erro RCON: ${err.message}` });
-            }
-        }
-        return;
+        await db.set(`rcon_${guildId}`, { 
+            ip, 
+            porta, 
+            senha, 
+            cargoId: cargoStaff.id,
+            cargoMencaoId: cargoMencao.id 
+        });
+
+        await interaction.reply({
+            content: `✅ Servidor RCON e Cargos configurados com sucesso!\n**IP:** \`${ip}:${porta}\` | **Staff Autorizado:** ${cargoStaff} | **Cargo Mencionado:** ${cargoMencao}`,
+            ephemeral: true
+        });
     }
 
-    // 2. Comandos Slash (/)
-    if (interaction.isChatInputCommand()) {
-        const { commandName, guildId, channelId } = interaction;
+    if (commandName === 'config-4fun') {
+        const ip = interaction.options.getString('ip');
+        const porta = interaction.options.getString('porta');
+        const senha = interaction.options.getString('senha');
+        const cargoStaff = interaction.options.getRole('cargo_staff');
 
-        if (commandName === 'config-rcon') {
-            const ip = interaction.options.getString('ip');
-            const porta = interaction.options.getString('porta');
-            const senha = interaction.options.getString('senha');
-            const cargoStaff = interaction.options.getRole('cargo_staff');
-            const cargoMencao = interaction.options.getRole('cargo_mencao');
+        await db.set(`rcon_${guildId}_4fun`, { 
+            ip, 
+            porta, 
+            senha, 
+            cargoId: cargoStaff.id 
+        });
 
-            await db.set(`rcon_${guildId}`, { ip, porta, senha, cargoId: cargoStaff.id, cargoMencaoId: cargoMencao.id });
-            return interaction.reply({ content: `✅ Configurado com sucesso!`, ephemeral: true });
+        return interaction.reply({
+            content: `✅ Servidor 4Fun configurado com sucesso!\n**IP:** \`${ip}:${porta}\` | **Staff Autorizado:** ${cargoStaff}`,
+            ephemeral: true
+        });
+    }
+
+    if (commandName === 'painel-4fun') {
+        const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
+        if (!serverConfig) {
+            return interaction.reply({ content: '❌ Configure o servidor primeiro usando o comando `/config-4fun`.', ephemeral: true });
         }
 
-        if (commandName === 'config-4fun') {
-            const ip = interaction.options.getString('ip');
-            const porta = interaction.options.getString('porta');
-            const senha = interaction.options.getString('senha');
-            const cargoStaff = interaction.options.getRole('cargo_staff');
+        const embedPainel = new EmbedBuilder()
+            .setTitle('🎮 SERVIDOR CS:MOS - 4FUN')
+            .setColor('#38bdf8')
+            .setDescription('🔄 Carregando informações do servidor 4Fun...')
+            .setTimestamp();
 
-            await db.set(`rcon_${guildId}_4fun`, { ip, porta, senha, cargoId: cargoStaff.id });
-            return interaction.reply({ content: `✅ Servidor 4Fun configurado!`, ephemeral: true });
+        const rowBotoes = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('4fun_refresh').setLabel('🔄 Atualizar Agora').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('4fun_manage').setLabel('⚙️ Gerenciar (Kick/Ban/Mapa)').setStyle(ButtonStyle.Danger)
+        );
+
+        const msgPainel = await interaction.channel.send({ embeds: [embedPainel], components: [rowBotoes] });
+        await db.set(`painel_4fun_${interaction.guildId}`, { channelId: interaction.channelId, messageId: msgPainel.id });
+
+        return interaction.reply({ content: '✅ Painel do 4Fun fixado e ativado com sucesso!', ephemeral: true });
+    }
+
+    if (commandName === 'vetarmapa') {
+        const cap1 = interaction.options.getUser('capitao1');
+        const cap2 = interaction.options.getUser('capitao2');
+
+        paineisAtivos.delete(channelId);
+
+        const numeroVeto = ((await db.get(`veto_count_${guildId}`)) || 0) + 1;
+        await db.set(`veto_count_${guildId}`, numeroVeto);
+
+        const sessaoId = Date.now().toString();
+        
+        const embed = new EmbedBuilder()
+            .setTitle(`🚫 Veto de Mapas CSMOS #${numeroVeto}`)
+            .setColor('#38bdf8')
+            .setDescription(`**Capitão 1:** ${cap1}\n**Capitão 2:** ${cap2}\n\n# Vez de ${cap1} banir 2 mapas!`);
+
+        const rows = criarBotoesMapas(POOL_MAPAS, sessaoId, 'ban', ButtonStyle.Danger, 'Banir ');
+
+        const respostaMsg = await interaction.reply({ embeds: [embed], components: rows, fetchReply: true });
+
+        vetosAtivos.set(sessaoId, {
+            numeroVeto: numeroVeto,
+            channelId: channelId,
+            lastMessageId: respostaMsg.id,
+            latestEmbed: embed,
+            latestComponents: rows,
+            cap1Id: cap1.id,
+            cap2Id: cap2.id,
+            vezDoCap: cap1.id,
+            bansNoTurnoAtual: 0,
+            mapasRestantes: [...POOL_MAPAS]
+        });
+    }
+
+    if (commandName === 'enviar-msg') {
+        const serverConfig = await db.get(`rcon_${guildId}`);
+        let temPermissao = interaction.member.permissions.has('Administrator');
+
+        if (serverConfig && serverConfig.cargoId) {
+            if (interaction.member.roles.cache.has(serverConfig.cargoId)) {
+                temPermissao = true;
+            }
         }
 
-        if (commandName === 'painel-4fun') {
-            const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
-            if (!serverConfig) return interaction.reply({ content: '❌ Configure usando `/config-4fun` primeiro.', ephemeral: true });
-
-            const embedPainel = new EmbedBuilder()
-                .setTitle('🎮 SERVIDOR CS:MOS - 4FUN')
-                .setColor('#38bdf8')
-                .setDescription('🔄 Carregando informações...');
-
-            const rowBotoes = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('4fun_refresh').setLabel('🔄 Atualizar Agora').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId('4fun_manage').setLabel('⚙️ Gerenciar (Kick/Ban/Mapa)').setStyle(ButtonStyle.Danger)
-            );
-
-            const msgPainel = await interaction.channel.send({ embeds: [embedPainel], components: [rowBotoes] });
-            await db.set(`painel_4fun_${interaction.guildId}`, { channelId: interaction.channelId, messageId: msgPainel.id });
-
-            return interaction.reply({ content: '✅ Painel ativado!', ephemeral: true });
+        if (!temPermissao) {
+            const cargoExibicao = serverConfig && serverConfig.cargoId ? `<@&${serverConfig.cargoId}>` : 'Cargo Staff configurado';
+            return interaction.reply({ content: `🚫 Apenas administradores ou membros com o ${cargoExibicao} podem usar este comando.`, ephemeral: true });
         }
 
-        if (commandName === 'vetarmapa') {
-            const cap1 = interaction.options.getUser('capitao1');
-            const cap2 = interaction.options.getUser('capitao2');
+        const msgTexto = interaction.options.getString('mensagem');
+        const linkGif = interaction.options.getString('link_gif');
 
-            paineisAtivos.delete(channelId);
-            const numeroVeto = ((await db.get(`veto_count_${guildId}`)) || 0) + 1;
-            await db.set(`veto_count_${guildId}`, numeroVeto);
-
-            const sessaoId = Date.now().toString();
-            const embed = new EmbedBuilder()
-                .setTitle(`🚫 Veto de Mapas CSMOS #${numeroVeto}`)
-                .setColor('#38bdf8')
-                .setDescription(`**Capitão 1:** ${cap1}\n**Capitão 2:** ${cap2}\n\n# Vez de ${cap1} banir 2 mapas!`);
-
-            const rows = criarBotoesMapas(POOL_MAPAS, sessaoId, 'ban', ButtonStyle.Danger, 'Banir ');
-            const respostaMsg = await interaction.reply({ embeds: [embed], components: rows, fetchReply: true });
-
-            vetosAtivos.set(sessaoId, {
-                numeroVeto,
-                channelId,
-                lastMessageId: respostaMsg.id,
-                latestEmbed: embed,
-                latestComponents: rows,
-                cap1Id: cap1.id,
-                cap2Id: cap2.id,
-                vezDoCap: cap1.id,
-                bansNoTurnoAtual: 0,
-                mapasRestantes: [...POOL_MAPAS]
-            });
-            return;
+        if (!msgTexto && !linkGif) {
+            return interaction.reply({ content: '⚠️ Você precisa fornecer pelo menos uma mensagem de texto ou um link de GIF/imagem para enviar.', ephemeral: true });
         }
 
-        if (commandName === 'enviar-msg') {
-            await interaction.deferReply({ ephemeral: true });
-            const msgTexto = interaction.options.getString('mensagem');
-            const linkGif = interaction.options.getString('link_gif');
-
-            if (!msgTexto && !linkGif) return interaction.editReply({ content: '⚠️ Forneça uma mensagem ou GIF.' });
-
+        try {
             const payload = {};
             if (msgTexto) payload.content = msgTexto;
             if (linkGif) payload.files = [linkGif];
 
             await interaction.channel.send(payload);
-            return interaction.editReply({ content: '✅ Enviado com sucesso!' });
+            await interaction.reply({ content: '✅ Mensagem enviada com sucesso!', ephemeral: true });
+        } catch (err) {
+            await interaction.reply({ content: `❌ Erro ao enviar mensagem: ${err.message}`, ephemeral: true });
         }
     }
+});
 
-    // 3. Menus Select (Dropdowns)
+// Helper para gerar linhas de botões
+function criarBotoesMapas(mapasDisponiveis, sessaoId, acao, estilo, prefixoRotulo = '') {
+    const rows = [];
+    let rowAtual = new ActionRowBuilder();
+
+    mapasDisponiveis.forEach((mapa, index) => {
+        if (index > 0 && index % 5 === 0) {
+            rows.push(rowAtual);
+            rowAtual = new ActionRowBuilder();
+        }
+
+        rowAtual.addComponents(
+            new ButtonBuilder()
+                .setCustomId(`${acao}:${sessaoId}:${mapa.id}`)
+                .setLabel(`${prefixoRotulo}${mapa.nome}`)
+                .setStyle(estilo)
+        );
+    });
+
+    if (rowAtual.components.length > 0) rows.push(rowAtual);
+
+    const rowCancelar = new ActionRowBuilder().addComponents(
+        new ButtonBuilder()
+            .setCustomId(`cancel_veto:${sessaoId}`)
+            .setLabel('🛑 Cancelar Veto')
+            .setStyle(ButtonStyle.Secondary)
+    );
+    rows.push(rowCancelar);
+
+    return rows;
+}
+
+// Gerenciador de cliques nos Botões e Menus
+client.on('interactionCreate', async interaction => {
     if (interaction.isStringSelectMenu()) {
-        if (interaction.customId.startsWith('4fun_select_')) {
-            await interaction.deferReply({ ephemeral: true });
+        const customId = interaction.customId;
+        if (customId.startsWith('4fun_select_')) {
             const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
-            if (!serverConfig) return interaction.editReply({ content: '❌ Servidor não configurado.' });
+            if (!serverConfig) return interaction.reply({ content: '❌ Servidor 4Fun não configurado.', ephemeral: true });
 
-            const acao = interaction.customId.replace('4fun_select_', '');
+            const isStaff = interaction.member.roles.cache.has(serverConfig.cargoId) || interaction.member.permissions.has('Administrator');
+            if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs autorizados!', ephemeral: true });
+
+            const acao = customId.replace('4fun_select_', '');
             const valorEscolhido = interaction.values[0];
 
+            await interaction.deferReply({ ephemeral: true });
             try {
-                const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 2000 });
+                const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 3000 });
                 await rcon.connect();
 
                 let respostaRcon = '';
@@ -390,18 +476,21 @@ client.on('interactionCreate', async interaction => {
                     respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Você foi kickado do servidor 4Fun por um staff."`);
                 } else if (acao === 'ban') {
                     const statusResp = await rcon.send('status');
+                    const linhas = statusResp.split('\n');
                     let ipParaBanir = '';
-                    statusResp.split('\n').forEach(l => {
+
+                    linhas.forEach(l => {
                         if (l.includes(`# ${valorEscolhido} `)) {
                             const ipMatch = l.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+/);
-                            if (ipMatch) ipParaBanir = ipMatch[1];
+                            if (ipMatch) {
+                                ipParaBanir = ipMatch[1];
+                            }
                         }
                     });
 
                     if (ipParaBanir) {
                         await rcon.send(`addip 30 ${ipParaBanir}`);
-                        await rcon.send('writeip');
-                        respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Você foi banido do servidor por um staff."`);
+                        respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Você foi banido do servidor por um staff."\nwriteip`);
                     } else {
                         respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Banido por um staff."`);
                     }
@@ -410,49 +499,61 @@ client.on('interactionCreate', async interaction => {
                 }
 
                 await rcon.end();
-                return interaction.editReply({ content: `✅ Sucesso!\n\`\`\`text\n${respostaRcon || 'Comando executado.'}\n\`\`\`` });
+                return interaction.editReply({ content: `✅ Ação executada com sucesso!\n\`\`\`text\n${respostaRcon || 'Comando enviado.'}\n\`\`\`` });
             } catch (err) {
-                return interaction.editReply({ content: `❌ Erro RCON: ${err.message}` });
+                return interaction.editReply({ content: `❌ Erro ao executar comando RCON: ${err.message}` });
             }
         }
         return;
     }
 
-    // 4. Botões
     if (!interaction.isButton()) return;
+
     const customId = interaction.customId;
 
-    // Botões do 4Fun
+    // BOTÕES DO 4FUN
     if (customId.startsWith('4fun_')) {
         const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
-        if (!serverConfig) return interaction.reply({ content: '❌ Servidor 4Fun não configurado.', ephemeral: true });
+        if (!serverConfig) {
+            return interaction.reply({ content: '❌ Servidor 4Fun não configurado.', ephemeral: true });
+        }
 
         const isStaff = interaction.member.roles.cache.has(serverConfig.cargoId) || interaction.member.permissions.has('Administrator');
 
+        // 1. Atualizar Status do Painel 4Fun manualmente via botão (Com deferUpdate seguro)
         if (customId === '4fun_refresh') {
             await interaction.deferUpdate().catch(() => {});
             try {
-                const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 2000 });
+                const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 3000 });
                 await rcon.connect();
                 const statusResp = await rcon.send('status');
                 await rcon.end();
 
                 const matchMapa = statusResp.match(/map\s*:\s*([^\s\r\n]+)/i);
                 const mapaRaw = matchMapa ? matchMapa[1].toLowerCase().trim() : 'desconhecido';
-                const dadosMapa = MAPAS_4FUN[mapaRaw] || { nome: mapaRaw.toUpperCase(), download: 'https://www.mediafire.com' };
 
+                const dadosMapa = MAPAS_4FUN[mapaRaw] || { 
+                    nome: mapaRaw.toUpperCase(), 
+                    download: 'https://www.mediafire.com' 
+                };
+
+                const linhas = statusResp.split('\n');
                 let countPlayers = 0;
                 const listaNomes = [];
-                statusResp.split('\n').forEach(l => {
+
+                linhas.forEach(l => {
                     const linhaLimpa = l.trim();
                     if (linhaLimpa.startsWith('#') && !linhaLimpa.includes('userid')) {
                         countPlayers++;
                         const matchName = linhaLimpa.match(/^#\s+\d+\s+"([^"]+)"/);
-                        if (matchName) listaNomes.push(`🔹 ${matchName[1]}`);
+                        if (matchName) {
+                            listaNomes.push(`🔹 ${matchName[1]}`);
+                        }
                     }
                 });
 
                 const comandoConnectFormatado = `connect ${serverConfig.ip}:${serverConfig.porta}`;
+
                 const embedAtualizada = new EmbedBuilder()
                     .setTitle('🎮 SERVIDOR CS:MOS - 4FUN')
                     .setColor('#38bdf8')
@@ -470,50 +571,42 @@ client.on('interactionCreate', async interaction => {
                     .setFooter({ text: '🔄 Atualizado com sucesso • Painel Oficial 4Fun' })
                     .setTimestamp();
 
-                const rowBotoes = new ActionRowBuilder().addComponents(
-                    new ButtonBuilder().setCustomId('4fun_refresh').setLabel('🔄 Atualizar Agora').setStyle(ButtonStyle.Primary),
-                    new ButtonBuilder().setCustomId('4fun_manage').setLabel('⚙️ Gerenciar (Kick/Ban/Mapa)').setStyle(ButtonStyle.Danger)
-                );
+                await interaction.message.edit({ embeds: [embedAtualizada] }).catch(() => {});
+            } catch (err) {
+                const embedOffline = new EmbedBuilder()
+                    .setTitle('🎮 SERVIDOR CS:MOS - 4FUN [OFFLINE]')
+                    .setColor('#ef4444')
+                    .setDescription('⚠️ **O servidor caiu ou está offline!**\nBasta aguardar o responsável ligar o servidor novamente. As informações voltarão a ser atualizadas automaticamente em breve.')
+                    .setFooter({ text: '🔴 Servidor Inativo' })
+                    .setTimestamp();
 
-                await interaction.message.edit({ embeds: [embedAtualizada], components: [rowBotoes] }).catch(() => {});
-            } catch (err) {}
+                await interaction.message.edit({ embeds: [embedOffline] }).catch(() => {});
+            }
             return;
         }
 
+        // 2. Menu de Gerenciamento
         if (customId === '4fun_manage') {
-            if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs.', ephemeral: true });
+            if (!isStaff) {
+                return interaction.reply({ content: '🚫 Apenas administradores/staffs podem usar as funções de moderação do 4Fun!', ephemeral: true });
+            }
 
-            const rowAdmin1 = new ActionRowBuilder().addComponents(
+            const rowAdmin = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('4fun_cmd_map').setLabel('🗺️ Mudar Mapa').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('4fun_cmd_kick').setLabel('👢 Kickar Jogador').setStyle(ButtonStyle.Danger),
                 new ButtonBuilder().setCustomId('4fun_cmd_ban').setLabel('🔨 Banir Jogador').setStyle(ButtonStyle.Danger)
             );
-            const rowAdmin2 = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('4fun_cmd_custom').setLabel('💬 Comando Customizado').setStyle(ButtonStyle.Primary)
-            );
 
-            return interaction.reply({ content: '⚙️ Escolha a ação de moderação RCON que deseja realizar:', components: [rowAdmin1, rowAdmin2], ephemeral: true });
+            return interaction.reply({ content: '⚙️ Escolha a ação de moderação RCON que deseja realizar:', components: [rowAdmin], ephemeral: true });
         }
 
-        if (customId === '4fun_cmd_custom') {
-            if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs.', ephemeral: true });
-            const modal = new ModalBuilder().setCustomId('modal_rcon_custom').setTitle('💬 Comando RCON Personalizado');
-            const inputComando = new TextInputBuilder()
-                .setCustomId('input_rcon_cmd')
-                .setLabel('Digite o comando RCON exato:')
-                .setPlaceholder('Ex: mp_restartgame 1 ou sv_password abc')
-                .setStyle(TextInputStyle.Short)
-                .setRequired(true);
-            modal.addComponents(new ActionRowBuilder().addComponents(inputComando));
-            return await interaction.showModal(modal);
-        }
-
+        // Sub-botões de Ação Admin (Kick / Ban / Mapa)
         if (customId === '4fun_cmd_kick' || customId === '4fun_cmd_ban' || customId === '4fun_cmd_map') {
             if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs.', ephemeral: true });
-            await interaction.deferReply({ ephemeral: true });
 
+            await interaction.deferReply({ ephemeral: true });
             try {
-                const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 2000 });
+                const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 3000 });
                 await rcon.connect();
 
                 if (customId === '4fun_cmd_map') {
@@ -532,19 +625,35 @@ client.on('interactionCreate', async interaction => {
                 const statusResp = await rcon.send('status');
                 await rcon.end();
 
+                const linhas = statusResp.split('\n');
                 const options = [];
-                statusResp.split('\n').forEach(l => {
+
+                linhas.forEach(l => {
                     const linhaLimpa = l.trim();
                     if (linhaLimpa.startsWith('#') && !linhaLimpa.includes('userid')) {
                         const match = linhaLimpa.match(/^#\s+(\d+)\s+"([^"]+)"\s+([^\s]+)/);
                         const ipMatch = linhaLimpa.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+)\b/);
-                        if (match && options.length < 25) {
-                            options.push({ label: match[2].slice(0, 25), description: `SteamID: ${match[3]} | IP: ${ipMatch ? ipMatch[1] : 'N/A'}`.slice(0, 100), value: match[1] });
+
+                        if (match) {
+                            const userId = match[1];
+                            const nomePlayer = match[2];
+                            const steamId = match[3];
+                            const ipPlayer = ipMatch ? ipMatch[1] : 'N/A';
+
+                            if (options.length < 25) {
+                                options.push({
+                                    label: nomePlayer.slice(0, 25),
+                                    description: `SteamID: ${steamId} | IP: ${ipPlayer}`.slice(0, 100),
+                                    value: userId
+                                });
+                            }
                         }
                     }
                 });
 
-                if (options.length === 0) return interaction.editReply({ content: '⚠️ Não há jogadores conectados no momento no servidor 4Fun.' });
+                if (options.length === 0) {
+                    return interaction.editReply({ content: '⚠️ Não há jogadores conectados no momento no servidor 4Fun.' });
+                }
 
                 const acaoStr = customId === '4fun_cmd_kick' ? 'kick' : 'ban';
                 const selectPlayers = new StringSelectMenuBuilder()
@@ -552,32 +661,65 @@ client.on('interactionCreate', async interaction => {
                     .setPlaceholder('Selecione o jogador conectado')
                     .addOptions(options);
 
-                return interaction.editReply({ content: `👤 Selecione abaixo qual jogador conectado deseja **${acaoStr === 'kick' ? 'KICKAR' : 'BANIR'}**:`, components: [new ActionRowBuilder().addComponents(selectPlayers)] });
+                return interaction.editReply({
+                    content: `👤 Selecione abaixo qual jogador conectado deseja **${acaoStr === 'kick' ? 'KICKAR' : 'BANIR'}**:`,
+                    components: [new ActionRowBuilder().addComponents(selectPlayers)]
+                });
+
             } catch (err) {
                 return interaction.editReply({ content: `❌ Erro ao buscar jogadores online: ${err.message}` });
             }
         }
     }
 
-    // Botão Cancelar Veto
+    // BOTÃO: CANCELAR VETO
     if (customId.startsWith('cancel_veto:')) {
         const [, sessaoId] = customId.split(':');
         const sessao = vetosAtivos.get(sessaoId);
-        if (!sessao) return interaction.reply({ content: '❌ Esta sessão de veto já foi finalizada ou expirou.', ephemeral: true });
+
+        if (!sessao) {
+            return interaction.reply({ content: '❌ Esta sessão de veto já foi finalizada ou expirou.', ephemeral: true });
+        }
+
+        const serverConfig = await db.get(`rcon_${interaction.guildId}`);
+        let autorizacaoOK = false;
+
+        if (serverConfig && serverConfig.cargoId) {
+            autorizacaoOK = interaction.member.roles.cache.has(serverConfig.cargoId);
+        } else {
+            autorizacaoOK = interaction.member.permissions.has('Administrator');
+        }
+
+        if (!autorizacaoOK) {
+            return interaction.reply({ content: '🚫 Apenas membros do cargo Staff autorizado podem cancelar o veto!', ephemeral: true });
+        }
 
         vetosAtivos.delete(sessaoId);
-        const embedCancelado = new EmbedBuilder().setTitle('🛑 Veto Cancelado').setColor('#ef4444');
-        return interaction.update({ embeds: [embedCancelado], components: [] });
+
+        const embedCancelado = new EmbedBuilder()
+            .setTitle(`🛑 Veto de Mapas CSMOS #${sessao.numeroVeto} - CANCELADO`)
+            .setColor('#ef4444')
+            .setDescription(`**Capitão 1:** <@${sessao.cap1Id}>\n**Capitão 2:** <@${sessao.cap2Id}>\n\n❌ **Veto cancelado por ${interaction.user}!**`);
+
+        await interaction.update({ embeds: [embedCancelado], components: [] });
+        return;
     }
 
-    // Fase de Veto de Mapas
+    // FASE 1: BANIMENTO DE MAPAS
     if (customId.startsWith('ban:')) {
-        const [, sessaoId, ...mapaParts] = customId.split(':');
-        const mapaId = mapaParts.join(':');
+        const parts = customId.split(':');
+        const sessaoId = parts[1];
+        const mapaId = parts.slice(2).join(':');
+
         const sessao = vetosAtivos.get(sessaoId);
 
-        if (!sessao) return interaction.reply({ content: '❌ Esta sessão de veto expirou.', ephemeral: true });
-        if (interaction.user.id !== sessao.vezDoCap) return interaction.reply({ content: '⚠️ Aguarde a sua vez de banir!', ephemeral: true });
+        if (!sessao) {
+            return interaction.reply({ content: '❌ Esta sessão de veto expirou.', ephemeral: true });
+        }
+
+        if (interaction.user.id !== sessao.vezDoCap) {
+            return interaction.reply({ content: '⚠️ Aguarde a sua vez de banir!', ephemeral: true });
+        }
 
         const mapaBani = sessao.mapasRestantes.find(m => m.id === mapaId);
         sessao.mapasRestantes = sessao.mapasRestantes.filter(m => m.id !== mapaId);
@@ -597,33 +739,52 @@ client.on('interactionCreate', async interaction => {
                 .setDescription(`**Capitão 1:** <@${sessao.cap1Id}>\n**Capitão 2:** <@${sessao.cap2Id}>\n\n🚫 **Último mapa banido:** ${mapaBani ? mapaBani.nome : 'N/A'}\n\n# ${capAtual}, clique no mapa que deseja JOGAR!`);
 
             const rowsPick = criarBotoesMapas(sessao.mapasRestantes, sessaoId, 'pick', ButtonStyle.Success, '✅ JOGAR ');
+
             sessao.latestEmbed = embedEscolha;
             sessao.latestComponents = rowsPick;
-            return interaction.update({ embeds: [embedEscolha], components: rowsPick });
+
+            await interaction.update({ embeds: [embedEscolha], components: rowsPick });
+            return;
         }
+
+        const mensagemStatusTurno = sessao.bansNoTurnoAtual === 1 
+            ? `# ${capAtual}, você precisa banir mais 1 mapa!` 
+            : `# Vez de ${capAtual} banir 2 mapas!`;
 
         const embed = new EmbedBuilder()
             .setTitle(`🚫 Veto de Mapas CSMOS #${sessao.numeroVeto}`)
             .setColor('#38bdf8')
-            .setDescription(`**Capitão 1:** <@${sessao.cap1Id}>\n**Capitão 2:** <@${sessao.cap2Id}>\n\n🚫 **Último mapa banido:** ${mapaBani ? mapaBani.nome : 'N/A'}\n\n# Vez de ${capAtual}`);
+            .setDescription(`**Capitão 1:** <@${sessao.cap1Id}>\n**Capitão 2:** <@${sessao.cap2Id}>\n\n🚫 **Último mapa banido:** ${mapaBani ? mapaBani.nome : 'N/A'}\n\n${mensagemStatusTurno}`);
 
         const rows = criarBotoesMapas(sessao.mapasRestantes, sessaoId, 'ban', ButtonStyle.Danger, 'Banir ');
+
         sessao.latestEmbed = embed;
         sessao.latestComponents = rows;
-        return interaction.update({ embeds: [embed], components: rows });
+
+        await interaction.update({ embeds: [embed], components: rows });
     }
 
-    // Fase de Escolha Final (Pick)
+    // FASE 2: ESCOLHA FINAL (PICK)
     if (customId.startsWith('pick:')) {
         await interaction.deferUpdate().catch(() => {});
-        const [, sessaoId, ...mapaParts] = customId.split(':');
-        const mapaId = mapaParts.join(':');
+
+        const parts = customId.split(':');
+        const sessaoId = parts[1];
+        const mapaId = parts.slice(2).join(':');
+
         const sessao = vetosAtivos.get(sessaoId);
 
-        if (!sessao) return;
-        if (interaction.user.id !== sessao.vezDoCap) return;
+        if (!sessao) {
+            return interaction.followUp({ content: '❌ Esta sessão expirou.', ephemeral: true }).catch(() => {});
+        }
+
+        if (interaction.user.id !== sessao.vezDoCap) {
+            return interaction.followUp({ content: '⚠️ Apenas o capitão da vez pode escolher o mapa final!', ephemeral: true }).catch(() => {});
+        }
 
         const mapaEscolhido = sessao.mapasRestantes.find(m => m.id === mapaId) || sessao.mapasRestantes[0];
+        const channelId = interaction.channelId;
+
         vetosAtivos.delete(sessaoId);
 
         const embedConcluido = new EmbedBuilder()
@@ -631,32 +792,58 @@ client.on('interactionCreate', async interaction => {
             .setColor('#34d399')
             .setDescription(`**Capitão 1:** <@${sessao.cap1Id}>\n**Capitão 2:** <@${sessao.cap2Id}>\n\n✅ **Mapa Escolhido:** **${mapaEscolhido.nome.toUpperCase()}**`);
 
-        await interaction.editReply({ embeds: [embedConcluido], components: [] }).catch(() => {});
+        await interaction.editReply({
+            embeds: [embedConcluido],
+            components: []
+        }).catch(err => console.error('Erro ao editar veto:', err));
 
         let statusRcon = '✅ Mapa alterado no servidor!';
         let senhaJogo = 'sem senha';
 
         try {
             await executarRCON(interaction.guildId, `changelevel ${mapaEscolhido.id}`);
+        } catch (err) {
+            console.error('⚠️ Erro RCON ao trocar mapa:', err.message);
+            statusRcon = `⚠️ **Falha RCON:** Não foi possível trocar o mapa no servidor (${err.message}).`;
+        }
+
+        try {
             const respSenha = await executarRCON(interaction.guildId, 'sv_password');
             const match = respSenha.match(/"sv_password"\s*(?:is|=)\s*"([^"]*)"/i) || respSenha.match(/"([^"]*)"/);
-            if (match && match[1] && match[1].trim() !== '') senhaJogo = match[1];
+            if (match && match[1] && match[1].trim() !== '') {
+                senhaJogo = match[1];
+            }
         } catch (err) {
-            statusRcon = `⚠️ **Falha RCON:** Não foi possível trocar o mapa no servidor (${err.message}).`;
+            console.error('⚠️ Erro RCON ao buscar sv_password:', err.message);
         }
 
         const serverConfig = await db.get(`rcon_${interaction.guildId}`);
         const ipServidor = serverConfig && serverConfig.ip ? serverConfig.ip : '92.246.130.12';
         const portaServidor = serverConfig && serverConfig.porta ? serverConfig.porta : '27015';
+        const comandoConnectFormatado = `connect ${ipServidor}:${portaServidor}`;
+
+        const dataComCarencia = new Date(Date.now() + 8 * 60 * 1000);
+        const horarioGo = dataComCarencia.toLocaleTimeString('pt-BR', { 
+            timeZone: 'America/Sao_Paulo', 
+            hour: '2-digit', 
+            minute: '2-digit',
+            hour12: false 
+        });
+
+        const tagCargoMencao = serverConfig && serverConfig.cargoMencaoId 
+            ? `<@&${serverConfig.cargoMencaoId}>` 
+            : '@Ranked CSMOS PLAYER';
 
         const embedAnuncio = new EmbedBuilder()
             .setTitle('🎯 MAPA TROCADO')
             .setColor('#10b981')
             .addFields(
                 { name: '🗺️ MAPA', value: `\`\`\`text\n${mapaEscolhido.nome.toUpperCase()}\n\`\`\``, inline: true },
+                { name: '⏰ GO', value: `\`\`\`text\n${horarioGo}\n\`\`\``, inline: true },
                 { name: '🔑 PASSWORD', value: `\`\`\`text\n${senhaJogo}\n\`\`\``, inline: true },
                 { name: '📥 DOWNLOAD DO MAPA', value: `[👉 Clique aqui para baixar ${mapaEscolhido.nome.toUpperCase()}](${mapaEscolhido.download})`, inline: false },
-                { name: '🔗 CONECTAR DIRETO NO SERVIDOR', value: `\`connect ${ipServidor}:${portaServidor}\``, inline: false }
+                { name: '🔗 CONECTAR DIRETO NO SERVIDOR', value: 'Caso o servidor não apareça na lista do jogo, clique e copie o comando abaixo:', inline: false },
+                { name: '📋 COMANDO PARA COPIAR', value: `\`${comandoConnectFormatado}\``, inline: false }
             )
             .setImage(URL_GIF_ANUNCIO)
             .setFooter({ text: statusRcon });
@@ -675,76 +862,106 @@ client.on('interactionCreate', async interaction => {
             new ButtonBuilder().setCustomId('rcon_status').setLabel('📊 Status').setStyle(ButtonStyle.Primary)
         );
 
-        const tagCargoMencao = serverConfig && serverConfig.cargoMencaoId ? `<@&${serverConfig.cargoMencaoId}>` : '@Ranked CSMOS PLAYER';
-
         try {
             const novaMsgAnuncio = await interaction.followUp({
                 content: tagCargoMencao,
                 embeds: [embedAnuncio],
                 components: [painelLinha1, painelLinha2]
             });
-            paineisAtivos.set(interaction.channelId, {
+
+            paineisAtivos.set(channelId, {
                 lastMessageId: novaMsgAnuncio.id,
                 content: tagCargoMencao,
                 embeds: [embedAnuncio],
                 components: [painelLinha1, painelLinha2]
             });
-        } catch (err) {}
-        return;
+        } catch (errSend) {
+            console.error('❌ Erro ao enviar a nova mensagem:', errSend);
+        }
     }
 
-    // Botões do Painel RCON de Partida
+    // AÇÕES DO PAINEL RCON
     if (customId.startsWith('rcon_')) {
         await interaction.deferReply({ ephemeral: true });
 
         if (customId === 'rcon_status') {
             try {
                 const respStatus = await executarRCON(interaction.guildId, 'status');
-                return interaction.editReply({ content: `\`\`\`text\n${respStatus.slice(0, 1900)}\n\`\`\`` });
+
+                let senhaJogo = 'sem senha';
+                try {
+                    const respSenha = await executarRCON(interaction.guildId, 'sv_password');
+                    const match = respSenha.match(/"sv_password"\s*(?:is|=)\s*"([^"]*)"/i) || respSenha.match(/"([^"]*)"/);
+                    if (match && match[1] && match[1].trim() !== '') {
+                        senhaJogo = match[1];
+                    }
+                } catch (e) {}
+
+                const matchMapa = respStatus.match(/map\s*:\s*([^\s\r\n]+)/i);
+                const mapaAtual = matchMapa ? matchMapa[1] : 'Desconhecido';
+
+                const linhas = respStatus.split('\n');
+                const jogadores = linhas
+                    .filter(l => l.trim().startsWith('#') && !l.includes('userid'))
+                    .map(l => l.trim())
+                    .join('\n');
+
+                const embedStatus = new EmbedBuilder()
+                    .setTitle('📊 Status Atual do Servidor CS')
+                    .setColor('#38bdf8')
+                    .addFields(
+                        { name: '🗺️ Mapa Atual', value: `\`${mapaAtual}\``, inline: true },
+                        { name: '🔑 Senha', value: `\`${senhaJogo}\``, inline: true },
+                        { name: '👥 Jogadores Conectados', value: jogadores ? `\`\`\`text\n${jogadores.slice(0, 1000)}\n\`\`\`` : '_Nenhum jogador conectado no momento._' }
+                    );
+
+                return interaction.editReply({ embeds: [embedStatus] });
             } catch (error) {
-                return interaction.editReply({ content: `❌ Erro: ${error.message}` });
+                return interaction.editReply({ content: `❌ Erro ao consultar o status RCON: ${error.message}` });
+            }
+        }
+
+        const serverConfig = await db.get(`rcon_${interaction.guildId}`);
+
+        if (serverConfig && serverConfig.cargoId) {
+            const temCargo = interaction.member.roles.cache.has(serverConfig.cargoId);
+            if (!temCargo) {
+                return interaction.editReply({ content: '🚫 Você não tem o cargo de Staff autorizado para controlar o servidor!' });
             }
         }
 
         try {
-            if (customId === 'rcon_go') await executarRCON(interaction.guildId, 'exec mix');
-            else if (customId === 'rcon_warmup') await executarRCON(interaction.guildId, 'mp_warmuptime 999; mp_warmup_start');
-            else if (customId === 'rcon_warmup_end') await executarRCON(interaction.guildId, 'mp_warmup_end');
-            else if (customId === 'rcon_restart') await executarRCON(interaction.guildId, 'mp_restartgame 1');
-            else if (customId === 'rcon_live') await executarRCON(interaction.guildId, 'mp_restartgame 3');
-            else if (customId === 'rcon_pause') await executarRCON(interaction.guildId, 'exec pause');
-            else if (customId === 'rcon_unpause') await executarRCON(interaction.guildId, 'exec unpause');
-
-            return interaction.editReply({ content: '✅ Comando RCON executado com sucesso!' });
+            if (customId === 'rcon_go') {
+                await executarRCON(interaction.guildId, 'exec mix');
+                await interaction.editReply({ content: '🚀 Comando **exec mix** enviado com sucesso!' });
+            } else if (customId === 'rcon_warmup') {
+                await executarRCON(interaction.guildId, 'mp_warmuptime 999; mp_warmup_start');
+                await interaction.editReply({ content: '🔥 **Warmup** iniciado (999s)!' });
+            } else if (customId === 'rcon_warmup_end') {
+                await executarRCON(interaction.guildId, 'mp_warmup_end');
+                await interaction.editReply({ content: '🛑 **Warmup** encerrado!' });
+            } else if (customId === 'rcon_restart') {
+                await executarRCON(interaction.guildId, 'mp_restartgame 1');
+                await interaction.editReply({ content: '⚡ **Restart de 1s** enviado!' });
+            } else if (customId === 'rcon_live') {
+                await executarRCON(interaction.guildId, 'mp_restartgame 3');
+                await interaction.editReply({ content: '🟢 **PARTIDA LIVE (3s)**!' });
+            } else if (customId === 'rcon_pause') {
+                await executarRCON(interaction.guildId, 'exec pause');
+                await interaction.editReply({ content: '⏸️ Comando **exec pause** enviado!' });
+            } else if (customId === 'rcon_unpause') {
+                await executarRCON(interaction.guildId, 'exec unpause');
+                await interaction.editReply({ content: '▶️ Comando **exec unpause** enviado!' });
+            }
         } catch (error) {
-            return interaction.editReply({ content: `❌ Erro: ${error.message}` });
+            await interaction.editReply({ content: `❌ Erro ao enviar RCON: ${error.message}` });
         }
     }
 });
 
-// Helper de botões de mapas
-function criarBotoesMapas(mapasDisponiveis, sessaoId, acao, estilo, prefixoRotulo = '') {
-    const rows = [];
-    let rowAtual = new ActionRowBuilder();
-
-    mapasDisponiveis.forEach((mapa, index) => {
-        if (index > 0 && index % 5 === 0) {
-            rows.push(rowAtual);
-            rowAtual = new ActionRowBuilder();
-        }
-        rowAtual.addComponents(
-            new ButtonBuilder().setCustomId(`${acao}:${sessaoId}:${mapa.id}`).setLabel(`${prefixoRotulo}${mapa.nome}`).setStyle(estilo)
-        );
-    });
-    if (rowAtual.components.length > 0) rows.push(rowAtual);
-
-    rows.push(new ActionRowBuilder().addComponents(
-        new ButtonBuilder().setCustomId(`cancel_veto:${sessaoId}`).setLabel('🛑 Cancelar Veto').setStyle(ButtonStyle.Secondary)
-    ));
-    return rows;
-}
-
-// Sistema de Mix
+// ========================================================
+// SISTEMA DE PING DO MIX
+// ========================================================
 const CANAL_TEXTO_MIX_ID = '1464788173170413743'; 
 const CANAL_VOZ_ESPERA_ID = '1414067786056990822'; 
 const LINK_CONVITE_CALL = 'https://discord.gg/hZ2dceHZ5J';
@@ -756,30 +973,93 @@ let timerLoopInatividade = null;
 async function verificarEEnviarMix(guild) {
     try {
         if (!guild) return;
+
         const canalTexto = guild.channels.cache.get(CANAL_TEXTO_MIX_ID);
         const canalEspera = guild.channels.cache.get(CANAL_VOZ_ESPERA_ID);
+
         if (!canalTexto || !canalEspera) return;
 
+        const temPartidaOuRascunhoRolando = guild.channels.cache.some(channel => 
+            channel.isVoiceBased() && 
+            channel.id !== CANAL_VOZ_ESPERA_ID && 
+            channel.members.size > 0 &&
+            PALAVRAS_CHAVE_NEATQUEUE.some(palavra => channel.name.toLowerCase().includes(palavra))
+        );
+
+        if (temPartidaOuRascunhoRolando) {
+            agendarProximaChecagemInatividade(guild);
+            return;
+        }
+
         const conectados = canalEspera.members.size;
+
+        try {
+            const mensagensAntigas = await canalTexto.messages.fetch({ limit: 15 });
+            const mensagensDoBot = mensagensAntigas.filter(m => m.author.id === client.user.id);
+            for (const [, msg] of mensagensDoBot) {
+                await msg.delete().catch(() => {});
+            }
+        } catch (err) {
+            console.error('Erro ao limpar mensagens antigas:', err);
+        }
+
         if (conectados > 0 && conectados < 10) {
             const faltam = 10 - conectados;
+
+            const serverConfig = await db.get(`rcon_${guild.id}`);
+            const tagCargo = serverConfig && serverConfig.cargoMencaoId 
+                ? `<@&${serverConfig.cargoMencaoId}>` 
+                : '@Ranked CSMOS PLAYER';
+
             const embedMix = new EmbedBuilder()
                 .setTitle(`⚔️ LOBBY CS:MOS - SALA DE ESPERA`)
                 .setColor('#f59e0b')
-                .setDescription(`# +${faltam} MIX\n\n📌 **Status:** \`${conectados}/10\` jogadores.`);
+                .setDescription(`# +${faltam} MIX\n\n📌 **Status:** \`${conectados}/10\` jogadores conectados na sala.`)
+                .setImage(URL_GIF_MIX)
+                .setFooter({ text: 'Clique no botão abaixo para entrar na chamada de voz.' });
 
             const rowBotaoCall = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setLabel('🎧 Entrar na Call').setStyle(ButtonStyle.Link).setURL(LINK_CONVITE_CALL)
+                new ButtonBuilder()
+                    .setLabel('🎧 Clique aqui para Entrar na Call')
+                    .setStyle(ButtonStyle.Link)
+                    .setURL(LINK_CONVITE_CALL)
             );
 
-            await canalTexto.send({ embeds: [embedMix], components: [rowBotaoCall] }).catch(() => {});
+            await canalTexto.send({
+                content: tagCargo,
+                embeds: [embedMix],
+                components: [rowBotaoCall]
+            });
         }
-    } catch (e) {}
+
+        agendarProximaChecagemInatividade(guild);
+
+    } catch (error) {
+        console.error('❌ Erro no sistema de Mix:', error);
+        agendarProximaChecagemInatividade(guild);
+    }
 }
 
 function agendarProximaChecagemInatividade(guild) {
     if (timerLoopInatividade) clearTimeout(timerLoopInatividade);
-    timerLoopInatividade = setTimeout(() => verificarEEnviarMix(guild), 60 * 1000);
+    timerLoopInatividade = setTimeout(async () => {
+        await verificarEEnviarMix(guild);
+    }, 60 * 1000);
 }
+
+client.on('voiceStateUpdate', async (oldState, newState) => {
+    if (oldState.channelId === newState.channelId) return;
+
+    const envolveuCallEspera = oldState.channelId === CANAL_VOZ_ESPERA_ID || newState.channelId === CANAL_VOZ_ESPERA_ID;
+    if (!envolveuCallEspera) return;
+
+    const guild = newState.guild || oldState.guild;
+
+    if (timerMixDebounce) clearTimeout(timerMixDebounce);
+
+    timerMixDebounce = setTimeout(async () => {
+        await verificarEEnviarMix(guild);
+    }, 6000);
+});
 
 client.login(config.token);
