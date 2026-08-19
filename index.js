@@ -237,14 +237,15 @@ function iniciarLoopPainel4Fun(guild) {
                     { name: '\u200B', value: '\u200B', inline: false },
                     { name: '📥 Download do Mapa', value: `[📥 Baixar ${dadosMapa.nome}](${dadosMapa.download})`, inline: false },
                     { name: '\u200B', value: '\u200B', inline: false },
-                    { name: '🇧🇷 CONECTAR DIRETO NO SERVIDOR\nAbra o console do jogo (`), cole o comando abaixo e aperte Enter:', value: `\`${comandoConnectFormatado}\``, inline: false }
+                    { name: '🇧🇷 CONECTAR DIRETO NO SERVIDOR\nCaso o servidor não apareça na lista do jogo, abra o console do jogo (`), copie o comando abaixo, cole lá dentro e aperte Enter para entrar.', value: `\`${comandoConnectFormatado}\``, inline: false },
+                    { name: '🇺🇸 CONNECT DIRECTLY TO THE SERVER\nIf the server does not appear in your game list, open your in-game console (`), copy the command below, paste it inside, and press Enter to join.', value: `\`${comandoConnectFormatado}\``, inline: false }
                 )
-                .setFooter({ text: '🔄 Atualizado automaticamente a cada 1 minuto' })
+                .setFooter({ text: '🔄 Atualizado automaticamente a cada 1 minuto • Painel Oficial 4Fun' })
                 .setTimestamp();
 
             const rowBotoes = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('4fun_refresh').setLabel('🔄 Atualizar').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId('4fun_manage').setLabel('⚙️ Gerenciar').setStyle(ButtonStyle.Danger)
+                new ButtonBuilder().setCustomId('4fun_refresh').setLabel('🔄 Atualizar Agora').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('4fun_manage').setLabel('⚙️ Gerenciar (Kick/Ban/Mapa)').setStyle(ButtonStyle.Danger)
             );
 
             await message.edit({ embeds: [embedAtualizada], components: [rowBotoes] }).catch(() => {});
@@ -312,8 +313,8 @@ client.on('interactionCreate', async interaction => {
                 .setDescription('🔄 Carregando informações...');
 
             const rowBotoes = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('4fun_refresh').setLabel('🔄 Atualizar').setStyle(ButtonStyle.Primary),
-                new ButtonBuilder().setCustomId('4fun_manage').setLabel('⚙️ Gerenciar').setStyle(ButtonStyle.Danger)
+                new ButtonBuilder().setCustomId('4fun_refresh').setLabel('🔄 Atualizar Agora').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('4fun_manage').setLabel('⚙️ Gerenciar (Kick/Ban/Mapa)').setStyle(ButtonStyle.Danger)
             );
 
             const msgPainel = await interaction.channel.send({ embeds: [embedPainel], components: [rowBotoes] });
@@ -386,7 +387,7 @@ client.on('interactionCreate', async interaction => {
 
                 let respostaRcon = '';
                 if (acao === 'kick') {
-                    respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Kickado por staff."`);
+                    respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Você foi kickado do servidor 4Fun por um staff."`);
                 } else if (acao === 'ban') {
                     const statusResp = await rcon.send('status');
                     let ipParaBanir = '';
@@ -400,9 +401,9 @@ client.on('interactionCreate', async interaction => {
                     if (ipParaBanir) {
                         await rcon.send(`addip 30 ${ipParaBanir}`);
                         await rcon.send('writeip');
-                        respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Banido por staff."`);
+                        respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Você foi banido do servidor por um staff."`);
                     } else {
-                        respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Banido."`);
+                        respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Banido por um staff."`);
                     }
                 } else if (acao === 'map') {
                     respostaRcon = await rcon.send(`changelevel ${valorEscolhido}`);
@@ -455,15 +456,26 @@ client.on('interactionCreate', async interaction => {
                 const embedAtualizada = new EmbedBuilder()
                     .setTitle('🎮 SERVIDOR CS:MOS - 4FUN')
                     .setColor('#38bdf8')
+                    .setDescription('Painel de monitoramento em tempo real do servidor 4Fun.')
                     .addFields(
                         { name: '🗺️ Mapa Atual', value: `\`${dadosMapa.nome}\``, inline: true },
                         { name: '👥 Jogadores Online', value: `\`${countPlayers}/32\``, inline: true },
-                        { name: '📋 Jogadores Conectados', value: listaNomes.length > 0 ? `${listaNomes.join('\n')}` : '_Nenhum jogador online._', inline: false },
-                        { name: '🇧🇷 CONECTAR DIRETO', value: `\`${comandoConnectFormatado}\``, inline: false }
+                        { name: '📋 Jogadores Conectados', value: listaNomes.length > 0 ? `${listaNomes.join('\n')}` : '_Nenhum jogador online no momento._', inline: false },
+                        { name: '\u200B', value: '\u200B', inline: false },
+                        { name: '📥 Download do Mapa', value: `[📥 Baixar ${dadosMapa.nome}](${dadosMapa.download})`, inline: false },
+                        { name: '\u200B', value: '\u200B', inline: false },
+                        { name: '🇧🇷 CONECTAR DIRETO NO SERVIDOR\nCaso o servidor não apareça na lista do jogo, abra o console do jogo (`), copie o comando abaixo, cole lá dentro e aperte Enter para entrar.', value: `\`${comandoConnectFormatado}\``, inline: false },
+                        { name: '🇺🇸 CONNECT DIRECTLY TO THE SERVER\nIf the server does not appear in your game list, open your in-game console (`), copy the command below, paste it inside, and press Enter to join.', value: `\`${comandoConnectFormatado}\``, inline: false }
                     )
+                    .setFooter({ text: '🔄 Atualizado com sucesso • Painel Oficial 4Fun' })
                     .setTimestamp();
 
-                await interaction.message.edit({ embeds: [embedAtualizada] }).catch(() => {});
+                const rowBotoes = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder().setCustomId('4fun_refresh').setLabel('🔄 Atualizar Agora').setStyle(ButtonStyle.Primary),
+                    new ButtonBuilder().setCustomId('4fun_manage').setLabel('⚙️ Gerenciar (Kick/Ban/Mapa)').setStyle(ButtonStyle.Danger)
+                );
+
+                await interaction.message.edit({ embeds: [embedAtualizada], components: [rowBotoes] }).catch(() => {});
             } catch (err) {}
             return;
         }
@@ -473,14 +485,14 @@ client.on('interactionCreate', async interaction => {
 
             const rowAdmin1 = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('4fun_cmd_map').setLabel('🗺️ Mudar Mapa').setStyle(ButtonStyle.Secondary),
-                new ButtonBuilder().setCustomId('4fun_cmd_kick').setLabel('👢 Kickar').setStyle(ButtonStyle.Danger),
-                new ButtonBuilder().setCustomId('4fun_cmd_ban').setLabel('🔨 Banir').setStyle(ButtonStyle.Danger)
+                new ButtonBuilder().setCustomId('4fun_cmd_kick').setLabel('👢 Kickar Jogador').setStyle(ButtonStyle.Danger),
+                new ButtonBuilder().setCustomId('4fun_cmd_ban').setLabel('🔨 Banir Jogador').setStyle(ButtonStyle.Danger)
             );
             const rowAdmin2 = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('4fun_cmd_custom').setLabel('💬 Comando Customizado').setStyle(ButtonStyle.Primary)
             );
 
-            return interaction.reply({ content: '⚙️ Escolha a ação:', components: [rowAdmin1, rowAdmin2], ephemeral: true });
+            return interaction.reply({ content: '⚙️ Escolha a ação de moderação RCON que deseja realizar:', components: [rowAdmin1, rowAdmin2], ephemeral: true });
         }
 
         if (customId === '4fun_cmd_custom') {
@@ -488,7 +500,8 @@ client.on('interactionCreate', async interaction => {
             const modal = new ModalBuilder().setCustomId('modal_rcon_custom').setTitle('💬 Comando RCON Personalizado');
             const inputComando = new TextInputBuilder()
                 .setCustomId('input_rcon_cmd')
-                .setLabel('Digite o comando RCON:')
+                .setLabel('Digite o comando RCON exato:')
+                .setPlaceholder('Ex: mp_restartgame 1 ou sv_password abc')
                 .setStyle(TextInputStyle.Short)
                 .setRequired(true);
             modal.addComponents(new ActionRowBuilder().addComponents(inputComando));
@@ -507,7 +520,7 @@ client.on('interactionCreate', async interaction => {
                     await rcon.end();
                     const selectMapa = new StringSelectMenuBuilder()
                         .setCustomId('4fun_select_map')
-                        .setPlaceholder('Selecione o mapa')
+                        .setPlaceholder('Selecione o mapa exato do 4Fun')
                         .addOptions([
                             { label: 'Dust2 4Fun', value: 'de_dust2_fps' },
                             { label: 'Mirage 4Fun', value: 'de_mirage_csgo_v2' },
@@ -524,23 +537,24 @@ client.on('interactionCreate', async interaction => {
                     const linhaLimpa = l.trim();
                     if (linhaLimpa.startsWith('#') && !linhaLimpa.includes('userid')) {
                         const match = linhaLimpa.match(/^#\s+(\d+)\s+"([^"]+)"\s+([^\s]+)/);
+                        const ipMatch = linhaLimpa.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+)\b/);
                         if (match && options.length < 25) {
-                            options.push({ label: match[2].slice(0, 25), description: `ID: ${match[1]} | SteamID: ${match[3]}`, value: match[1] });
+                            options.push({ label: match[2].slice(0, 25), description: `SteamID: ${match[3]} | IP: ${ipMatch ? ipMatch[1] : 'N/A'}`.slice(0, 100), value: match[1] });
                         }
                     }
                 });
 
-                if (options.length === 0) return interaction.editReply({ content: '⚠️ Nenhum jogador online.' });
+                if (options.length === 0) return interaction.editReply({ content: '⚠️ Não há jogadores conectados no momento no servidor 4Fun.' });
 
                 const acaoStr = customId === '4fun_cmd_kick' ? 'kick' : 'ban';
                 const selectPlayers = new StringSelectMenuBuilder()
                     .setCustomId(`4fun_select_${acaoStr}`)
-                    .setPlaceholder('Selecione o jogador')
+                    .setPlaceholder('Selecione o jogador conectado')
                     .addOptions(options);
 
-                return interaction.editReply({ content: `👤 Selecione o jogador para **${acaoStr.toUpperCase()}**:`, components: [new ActionRowBuilder().addComponents(selectPlayers)] });
+                return interaction.editReply({ content: `👤 Selecione abaixo qual jogador conectado deseja **${acaoStr === 'kick' ? 'KICKAR' : 'BANIR'}**:`, components: [new ActionRowBuilder().addComponents(selectPlayers)] });
             } catch (err) {
-                return interaction.editReply({ content: `❌ Erro: ${err.message}` });
+                return interaction.editReply({ content: `❌ Erro ao buscar jogadores online: ${err.message}` });
             }
         }
     }
@@ -549,7 +563,7 @@ client.on('interactionCreate', async interaction => {
     if (customId.startsWith('cancel_veto:')) {
         const [, sessaoId] = customId.split(':');
         const sessao = vetosAtivos.get(sessaoId);
-        if (!sessao) return interaction.reply({ content: '❌ Sessão expirada.', ephemeral: true });
+        if (!sessao) return interaction.reply({ content: '❌ Esta sessão de veto já foi finalizada ou expirou.', ephemeral: true });
 
         vetosAtivos.delete(sessaoId);
         const embedCancelado = new EmbedBuilder().setTitle('🛑 Veto Cancelado').setColor('#ef4444');
@@ -562,8 +576,8 @@ client.on('interactionCreate', async interaction => {
         const mapaId = mapaParts.join(':');
         const sessao = vetosAtivos.get(sessaoId);
 
-        if (!sessao) return interaction.reply({ content: '❌ Sessão expirada.', ephemeral: true });
-        if (interaction.user.id !== sessao.vezDoCap) return interaction.reply({ content: '⚠️ Não é sua vez!', ephemeral: true });
+        if (!sessao) return interaction.reply({ content: '❌ Esta sessão de veto expirou.', ephemeral: true });
+        if (interaction.user.id !== sessao.vezDoCap) return interaction.reply({ content: '⚠️ Aguarde a sua vez de banir!', ephemeral: true });
 
         const mapaBani = sessao.mapasRestantes.find(m => m.id === mapaId);
         sessao.mapasRestantes = sessao.mapasRestantes.filter(m => m.id !== mapaId);
@@ -578,9 +592,9 @@ client.on('interactionCreate', async interaction => {
 
         if (sessao.mapasRestantes.length === 2) {
             const embedEscolha = new EmbedBuilder()
-                .setTitle(`🎯 ESCOLHA FINAL #${sessao.numeroVeto}`)
+                .setTitle(`🎯 ESCOLHA FINAL DO MAPA #${sessao.numeroVeto}`)
                 .setColor('#34d399')
-                .setDescription(`**Capitão 1:** <@${sessao.cap1Id}>\n**Capitão 2:** <@${sessao.cap2Id}>\n\n🚫 **Banido:** ${mapaBani ? mapaBani.nome : 'N/A'}\n\n# ${capAtual}, clique no mapa para JOGAR!`);
+                .setDescription(`**Capitão 1:** <@${sessao.cap1Id}>\n**Capitão 2:** <@${sessao.cap2Id}>\n\n🚫 **Último mapa banido:** ${mapaBani ? mapaBani.nome : 'N/A'}\n\n# ${capAtual}, clique no mapa que deseja JOGAR!`);
 
             const rowsPick = criarBotoesMapas(sessao.mapasRestantes, sessaoId, 'pick', ButtonStyle.Success, '✅ JOGAR ');
             sessao.latestEmbed = embedEscolha;
@@ -589,9 +603,9 @@ client.on('interactionCreate', async interaction => {
         }
 
         const embed = new EmbedBuilder()
-            .setTitle(`🚫 Veto de Mapas #${sessao.numeroVeto}`)
+            .setTitle(`🚫 Veto de Mapas CSMOS #${sessao.numeroVeto}`)
             .setColor('#38bdf8')
-            .setDescription(`**Capitão 1:** <@${sessao.cap1Id}>\n**Capitão 2:** <@${sessao.cap2Id}>\n\n🚫 **Banido:** ${mapaBani ? mapaBani.nome : 'N/A'}\n\n# Vez de ${capAtual}`);
+            .setDescription(`**Capitão 1:** <@${sessao.cap1Id}>\n**Capitão 2:** <@${sessao.cap2Id}>\n\n🚫 **Último mapa banido:** ${mapaBani ? mapaBani.nome : 'N/A'}\n\n# Vez de ${capAtual}`);
 
         const rows = criarBotoesMapas(sessao.mapasRestantes, sessaoId, 'ban', ButtonStyle.Danger, 'Banir ');
         sessao.latestEmbed = embed;
@@ -613,12 +627,13 @@ client.on('interactionCreate', async interaction => {
         vetosAtivos.delete(sessaoId);
 
         const embedConcluido = new EmbedBuilder()
-            .setTitle(`🎯 MAPA ESCOLHIDO: ${mapaEscolhido.nome.toUpperCase()}`)
-            .setColor('#34d399');
+            .setTitle(`🎯 ESCOLHA FINAL DO MAPA #${sessao.numeroVeto} - CONCLUÍDO`)
+            .setColor('#34d399')
+            .setDescription(`**Capitão 1:** <@${sessao.cap1Id}>\n**Capitão 2:** <@${sessao.cap2Id}>\n\n✅ **Mapa Escolhido:** **${mapaEscolhido.nome.toUpperCase()}**`);
 
         await interaction.editReply({ embeds: [embedConcluido], components: [] }).catch(() => {});
 
-        let statusRcon = '✅ Mapa alterado!';
+        let statusRcon = '✅ Mapa alterado no servidor!';
         let senhaJogo = 'sem senha';
 
         try {
@@ -627,7 +642,7 @@ client.on('interactionCreate', async interaction => {
             const match = respSenha.match(/"sv_password"\s*(?:is|=)\s*"([^"]*)"/i) || respSenha.match(/"([^"]*)"/);
             if (match && match[1] && match[1].trim() !== '') senhaJogo = match[1];
         } catch (err) {
-            statusRcon = `⚠️ Falha RCON: ${err.message}`;
+            statusRcon = `⚠️ **Falha RCON:** Não foi possível trocar o mapa no servidor (${err.message}).`;
         }
 
         const serverConfig = await db.get(`rcon_${interaction.guildId}`);
@@ -635,26 +650,26 @@ client.on('interactionCreate', async interaction => {
         const portaServidor = serverConfig && serverConfig.porta ? serverConfig.porta : '27015';
 
         const embedAnuncio = new EmbedBuilder()
-            .setTitle('🎯 PARTIDA PRONTA')
+            .setTitle('🎯 MAPA TROCADO')
             .setColor('#10b981')
             .addFields(
                 { name: '🗺️ MAPA', value: `\`\`\`text\n${mapaEscolhido.nome.toUpperCase()}\n\`\`\``, inline: true },
                 { name: '🔑 PASSWORD', value: `\`\`\`text\n${senhaJogo}\n\`\`\``, inline: true },
-                { name: '📥 DOWNLOAD', value: `[Baixar Mapa](${mapaEscolhido.download})`, inline: false },
-                { name: '🔗 CONECTAR', value: `\`connect ${ipServidor}:${portaServidor}\``, inline: false }
+                { name: '📥 DOWNLOAD DO MAPA', value: `[👉 Clique aqui para baixar ${mapaEscolhido.nome.toUpperCase()}](${mapaEscolhido.download})`, inline: false },
+                { name: '🔗 CONECTAR DIRETO NO SERVIDOR', value: `\`connect ${ipServidor}:${portaServidor}\``, inline: false }
             )
             .setImage(URL_GIF_ANUNCIO)
             .setFooter({ text: statusRcon });
 
         const painelLinha1 = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('rcon_go').setLabel('🚀 GO').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('rcon_warmup').setLabel('🔥 Warmup').setStyle(ButtonStyle.Secondary),
+            new ButtonBuilder().setCustomId('rcon_go').setLabel('🚀 GO (exec mix)').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId('rcon_warmup').setLabel('🔥 Warmup (999s)').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('rcon_warmup_end').setLabel('🛑 Fim Warmup').setStyle(ButtonStyle.Danger),
-            new ButtonBuilder().setCustomId('rcon_restart').setLabel('⚡ Restart').setStyle(ButtonStyle.Secondary)
+            new ButtonBuilder().setCustomId('rcon_restart').setLabel('⚡ Restart (1s)').setStyle(ButtonStyle.Secondary)
         );
 
         const painelLinha2 = new ActionRowBuilder().addComponents(
-            new ButtonBuilder().setCustomId('rcon_live').setLabel('🟢 LIVE').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId('rcon_live').setLabel('🟢 LIVE (3s)').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId('rcon_pause').setLabel('⏸️ Pause').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('rcon_unpause').setLabel('▶️ Despause').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId('rcon_status').setLabel('📊 Status').setStyle(ButtonStyle.Primary)
@@ -729,7 +744,7 @@ function criarBotoesMapas(mapasDisponiveis, sessaoId, acao, estilo, prefixoRotul
     return rows;
 }
 
-// Sistema de Mix (Mantido igual)
+// Sistema de Mix
 const CANAL_TEXTO_MIX_ID = '1464788173170413743'; 
 const CANAL_VOZ_ESPERA_ID = '1414067786056990822'; 
 const LINK_CONVITE_CALL = 'https://discord.gg/hZ2dceHZ5J';
