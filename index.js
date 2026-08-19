@@ -1011,10 +1011,13 @@ async function verificarEEnviarMix(guild) {
                 ? `<@&${serverConfig.cargoMencaoId}>` 
                 : '@Ranked CSMOS PLAYER';
 
+            // Mensagem formatada com a quantidade de players faltando fora da embed, em negrito grande (#) junto do cargo
+            const conteudoMensagem = `# +${faltam} MIX - ${tagCargo}`;
+
             const embedMix = new EmbedBuilder()
                 .setTitle(`⚔️ LOBBY CS:MOS - SALA DE ESPERA`)
                 .setColor('#f59e0b')
-                .setDescription(`# +${faltam} MIX\n\n📌 **Status:** \`${conectados}/10\` jogadores conectados na sala.`)
+                .setDescription(`📌 **Status:** \`${conectados}/10\` jogadores conectados na sala.`)
                 .setImage(URL_GIF_MIX)
                 .setFooter({ text: 'Clique no botão abaixo para entrar na chamada de voz.' });
 
@@ -1026,7 +1029,7 @@ async function verificarEEnviarMix(guild) {
             );
 
             await canalTexto.send({
-                content: tagCargo,
+                content: conteudoMensagem,
                 embeds: [embedMix],
                 components: [rowBotaoCall]
             });
