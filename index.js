@@ -386,8 +386,18 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (commandName === 'enviar-msg') {
-        if (!interaction.member.permissions.has('Administrator')) {
-            return interaction.reply({ content: '🚫 Apenas administradores podem usar este comando.', ephemeral: true });
+        const serverConfig = await db.get(`rcon_${guildId}`);
+        let temPermissao = interaction.member.permissions.has('Administrator');
+
+        if (serverConfig && serverConfig.cargoId) {
+            if (interaction.member.roles.cache.has(serverConfig.cargoId)) {
+                temPermissao = true;
+            }
+        }
+
+        if (!temPermissao) {
+            const cargoExibicao = serverConfig && serverConfig.cargoId ? `<@&${serverConfig.cargoId}>` : 'Cargo Staff configurado';
+            return interaction.reply({ content: `🚫 Apenas administradores ou membros com o ${cargoExibicao} podem usar este comando.`, ephemeral: true });
         }
 
         const msgTexto = interaction.options.getString('mensagem');
