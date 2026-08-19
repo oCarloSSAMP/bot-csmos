@@ -86,8 +86,8 @@ const commands = [
     new SlashCommandBuilder()
         .setName('enviar-msg')
         .setDescription('Envia uma mensagem personalizada com um link de imagem/GIF')
-        .addStringOption(opt => opt.setName('mensagem').setDescription('O texto que o bot vai enviar').setRequired(true))
-        .addStringOption(opt => opt.setName('link_gif').setDescription('Cole o link do GIF aqui').setRequired(true))
+        .addStringOption(opt => opt.setName('mensagem').setDescription('O texto que o bot vai enviar').setRequired(false))
+        .addStringOption(opt => opt.setName('link_gif').setDescription('Cole o link do GIF aqui').setRequired(false))
 ];
 
 const rest = new REST({ version: '10' }).setToken(config.token);
@@ -403,11 +403,16 @@ client.on('interactionCreate', async interaction => {
         const msgTexto = interaction.options.getString('mensagem');
         const linkGif = interaction.options.getString('link_gif');
 
+        if (!msgTexto && !linkGif) {
+            return interaction.reply({ content: '⚠️ Você precisa fornecer pelo menos uma mensagem de texto ou um link de GIF/imagem para enviar.', ephemeral: true });
+        }
+
         try {
-            await interaction.channel.send({
-                content: msgTexto,
-                files: [linkGif]
-            });
+            const payload = {};
+            if (msgTexto) payload.content = msgTexto;
+            if (linkGif) payload.files = [linkGif];
+
+            await interaction.channel.send(payload);
             await interaction.reply({ content: '✅ Mensagem enviada com sucesso!', ephemeral: true });
         } catch (err) {
             await interaction.reply({ content: `❌ Erro ao enviar mensagem: ${err.message}`, ephemeral: true });
