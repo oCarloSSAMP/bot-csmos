@@ -506,8 +506,11 @@ client.on('interactionCreate', async interaction => {
                     let ipParaBanir = '';
 
                     linhas.forEach(l => {
-                        if (l.includes(`# ${valorEscolhido} `)) {
-                            const ipMatch = l.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+/);
+                        const linhaLimpa = l.trim();
+                        // Procura a linha correspondente ao userid exato selecionado
+                        if (linhaLimpa.startsWith('#') && linhaLimpa.includes(` ${valorEscolhido} `)) {
+                            // Captura o IP no formato IP:Porta que vem no status do Source/GoldSource
+                            const ipMatch = linhaLimpa.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+/);
                             if (ipMatch) {
                                 ipParaBanir = ipMatch[1];
                             }
@@ -515,10 +518,15 @@ client.on('interactionCreate', async interaction => {
                     });
 
                     if (ipParaBanir) {
-                        await rcon.send(`addip 30 ${ipParaBanir}`);
-                        respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Você foi banido do servidor por um staff."\nwriteip`);
+                        // Adiciona o IP na lista de banimento permanente do servidor e salva no arquivo .cfg de IP
+                        await rcon.send(`addip 0 ${ipParaBanir}`);
+                        await rcon.send('writeip');
+                        respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Você foi banido permanentemente por IP."`);
                     } else {
-                        respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Banido por um staff."`);
+                        // Fallback caso não ache o IP na linha do status, usa banid com permanência por ID
+                        await rcon.send(`banid 0 ${valorEscolhido} kick`);
+                        await rcon.send('writeid');
+                        respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Banido do servidor."`);
                     }
                 } else if (acao === 'map') {
                     respostaRcon = await rcon.send(`changelevel ${valorEscolhido}`);
@@ -620,7 +628,7 @@ client.on('interactionCreate', async interaction => {
             const rowAdmin1 = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('4fun_cmd_map').setLabel('🗺️ Mudar Mapa').setStyle(ButtonStyle.Secondary),
                 new ButtonBuilder().setCustomId('4fun_cmd_kick').setLabel('👢 Kickar Jogador').setStyle(ButtonStyle.Danger),
-                new ButtonBuilder().setCustomId('4fun_cmd_ban').setLabel('🔨 Banir Jogador').setStyle(ButtonStyle.Danger)
+                new ButtonBuilder().setCustomId('4fun_cmd_ban').setLabel('🔨 Banir Jogador (IP)').setStyle(ButtonStyle.Danger)
             );
             const rowAdmin2 = new ActionRowBuilder().addComponents(
                 new ButtonBuilder().setCustomId('4fun_cmd_custom').setLabel('💬 Comando Customizado').setStyle(ButtonStyle.Primary)
@@ -705,7 +713,7 @@ client.on('interactionCreate', async interaction => {
                     .addOptions(options);
 
                 return interaction.editReply({
-                    content: `👤 Selecione abaixo qual jogador conectado deseja **${acaoStr === 'kick' ? 'KICKAR' : 'BANIR'}**:`,
+                    content: `👤 Selecione abaixo qual jogador conectado deseja **${acaoStr === 'kick' ? 'KICKAR' : 'BANIR POR IP'}**:`,
                     components: [new ActionRowBuilder().addComponents(selectPlayers)]
                 });
 
