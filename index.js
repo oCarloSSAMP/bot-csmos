@@ -572,8 +572,12 @@ client.on('interactionCreate', async interaction => {
 
         const isStaff = interaction.member.roles.cache.has(serverConfig.cargoId) || interaction.member.permissions.has('Administrator');
 
-        // 1. Atualizar Status do Painel 4Fun manualmente via botão (Com deferUpdate seguro)
+        // 1. Atualizar Status do Painel 4Fun manualmente via botão (Restrito apenas para staffs autorizados)
         if (customId === '4fun_refresh') {
+            if (!isStaff) {
+                return interaction.reply({ content: '🚫 Apenas staffs autorizados podem atualizar o painel manualmente!', ephemeral: true });
+            }
+
             await interaction.deferUpdate().catch(() => {});
             try {
                 const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 3000 });
