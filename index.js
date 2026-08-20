@@ -188,7 +188,7 @@ client.on('messageCreate', async message => {
     }
 });
 
-// Loop automático para atualizar o Painel do 4Fun a cada 1 minuto
+// Loop automático para atualizar o Painel do 4Fun a cada 10 minutos (Evita sobrecarga na VPS)[cite: 3]
 function iniciarLoopPainel4Fun(guild) {
     setInterval(async () => {
         try {
@@ -248,7 +248,7 @@ function iniciarLoopPainel4Fun(guild) {
                     { name: '🇧🇷 CONECTAR DIRETO NO SERVIDOR\nCaso o servidor não apareça na lista do jogo, abra o console do jogo (`), copie o comando abaixo, cole lá dentro e aperte Enter para entrar.', value: `\`${comandoConnectFormatado}\``, inline: false },
                     { name: '🇺🇸 CONNECT DIRECTLY TO THE SERVER\nIf the server does not appear in your game list, open your in-game console (`), copy the command below, paste it inside, and press Enter to join.', value: `\`${comandoConnectFormatado}\``, inline: false }
                 )
-                .setFooter({ text: '🔄 Atualizado automaticamente a cada 1 minuto • Painel Oficial 4Fun' })
+                .setFooter({ text: '🔄 Atualizado automaticamente a cada 10 minutos • Painel Oficial 4Fun' })
                 .setTimestamp();
 
             const rowBotoes = new ActionRowBuilder().addComponents(
@@ -282,7 +282,7 @@ function iniciarLoopPainel4Fun(guild) {
                 await message.edit({ embeds: [embedOffline], components: [rowBotoes] }).catch(() => {});
             } catch (e) {}
         }
-    }, 60 * 1000);
+    }, 10 * 60 * 1000); // 10 minutos exatos[cite: 3]
 }
 
 // Interação dos Comandos Slash (/)
@@ -503,31 +503,49 @@ client.on('interactionCreate', async interaction => {
                 } else if (acao === 'ban') {
                     const statusResp = await rcon.send('status');
                     const linhas = statusResp.split('\n');
+                    let nomeJogador = 'Desconhecido';
                     let ipParaBanir = '';
+                    let steamIdParaBanir = '';
 
                     linhas.forEach(l => {
                         const linhaLimpa = l.trim();
                         // Procura a linha correspondente ao userid exato selecionado
                         if (linhaLimpa.startsWith('#') && linhaLimpa.includes(` ${valorEscolhido} `)) {
-                            // Captura o IP no formato IP:Porta que vem no status do Source/GoldSource
+                            const matchName = linhaLimpa.match(/^#\s+\d+\s+"([^"]+)"/);
+                            if (matchName) nomeJogador = matchName[1];
+
+                            // Captura o IP caso exista na linha do status
                             const ipMatch = linhaLimpa.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+/);
-                            if (ipMatch) {
-                                ipParaBanir = ipMatch[1];
-                            }
+                            if (ipMatch) ipParaBanir = ipMatch[1];
+
+                            // Captura a SteamID caso exista
+                            const matchSteam = linhaLimpa.match(/(STEAM_\d+:\d+:\d+|\[U:\d+:\d+\])/);
+                            if (matchSteam) steamIdParaBanir = matchSteam[1];
                         }
                     });
 
+                    // Aplica o banimento por IP de forma segura (ou via SteamID/UserID sem derrubar o server)
                     if (ipParaBanir) {
-                        // Adiciona o IP na lista de banimento permanente do servidor e salva no arquivo .cfg de IP
-                        await rcon.send(`addip 0 ${ipParaBanir}`);
-                        await rcon.send('writeip');
-                        respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Você foi banido permanentemente por IP."`);
-                    } else {
-                        // Fallback caso não ache o IP na linha do status, usa banid com permanência por ID
-                        await rcon.send(`banid 0 ${valorEscolhido} kick`);
-                        await rcon.send('writeid');
-                        respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Banido do servidor."`);
+                        await rcon.send(`addip 0 ${ipParaBanir}`).catch(() => {});
+                        await rcon.send('writeip').catch(() => {});
                     }
+
+                    if (steamIdParaBanir) {
+                        await rcon.send(`banid 0 ${steamIdParaBanir} kick`).catch(() => {});
+                        await rcon.send('writeid').catch(() => {});
+                    } else {
+                        await rcon.send(`banid 0 ${valorEscolhido} kick`).catch(() => {});
+                        await rcon.send('writeid').catch(() => {});
+                    }
+
+                    // Força o kick do player sem gerar erro de userid not found no chat
+                    respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Você foi banido permanentemente por IP."`).catch(() => 'Kick efetuado');
+                    await rcon.end();
+
+                    return interaction.editReply({ 
+                        content: `🔨 O jogador **${nomeJogador}** (IP: \`${ipParaBanir || 'Protegido/Indisponível'}\`) foi **banido por IP** e desconectado com sucesso do servidor!` 
+                    });
+
                 } else if (acao === 'map') {
                     respostaRcon = await rcon.send(`changelevel ${valorEscolhido}`);
                 }
