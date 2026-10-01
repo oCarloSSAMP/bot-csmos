@@ -1361,7 +1361,7 @@ function agendarProximaChecagemInatividade(guild) {
     if (timerLoopInatividade) clearTimeout(timerLoopInatividade);
     timerLoopInatividade = setTimeout(async () => {
         await verificarEEnviarMix(guild);
-    }, 60 * 1000);
+    }, 30 * 1000);
 }
 
 client.on('voiceStateUpdate', async (oldState, newState) => {
