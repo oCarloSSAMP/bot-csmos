@@ -38,7 +38,7 @@ const POOL_MAPAS = [
     { id: 'de_mirage_cs2', nome: 'Mirage', download: 'https://www.mediafire.com/file/qwgwlwrd9cs193d/MAPA+MIRAGE.zip/file' },
     { id: 'inferno2', nome: 'Inferno', download: 'https://www.mediafire.com/file/eo566t8hlxwjoc2/inferno2.zip/file' },
     { id: 'de_cache_fps', nome: 'Cache', download: 'https://www.mediafire.com/file/pse7q8hcbcpynyx/MAPA+CACHE.zip/file' },
-    { id: 'de_nukenew_csgo', nome: 'Nuke', download: 'https://www.mediafire.com/file/qbb5r99lqj1agdm/MAPA+NUKE.zip/file' },
+    { id: 'de_nuke_cs2mix', nome: 'Nuke', download: 'https://www.mediafire.com/file/ta1hljivv42p6aj/de_nuke_cs2mix.bsp/file' },
     { id: 'de_vertigo_csgo_v34_fix', nome: 'Vertigo', download: 'https://www.mediafire.com/file/ovzal4f70ottbt7/MAPA+VERTIGO.zip/file' },
     { id: 'de_overpass_cs2', nome: 'Overpass', download: 'https://www.mediafire.com/file/88dmm4sm5dacypz/MAPA+OVERPASS.zip/file' },
     { id: 'de_train_csgo', nome: 'Train', download: 'https://www.mediafire.com/file/gsbswz6z3zx9t7m/MAPA+TRAIN.zip/file' },
