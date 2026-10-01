@@ -36,7 +36,7 @@ const client = new Client({
 const POOL_MAPAS = [
     { id: 'de_dust2_csgo_new_v2', nome: 'Dust2', download: 'https://www.mediafire.com/file/yek5axz4dk64azm/MAPA_DUST2.zip/file' },
     { id: 'de_mirage_cs2', nome: 'Mirage', download: 'https://www.mediafire.com/file/qwgwlwrd9cs193d/MAPA+MIRAGE.zip/file' },
-    { id: 'de_inferno_csgo_cssold_fix', nome: 'Inferno', download: 'https://www.mediafire.com/file/ksjjrwprcriog6n/MAPA+INFERNO.zip/file' },
+    { id: 'inferno2', nome: 'Inferno', download: 'https://www.mediafire.com/file/ksjjrwprcriog6n/MAPA+INFERNO.zip/file' },
     { id: 'de_cache_fps', nome: 'Cache', download: 'https://www.mediafire.com/file/pse7q8hcbcpynyx/MAPA+CACHE.zip/file' },
     { id: 'de_nukenew_csgo', nome: 'Nuke', download: 'https://www.mediafire.com/file/qbb5r99lqj1agdm/MAPA+NUKE.zip/file' },
     { id: 'de_vertigo_csgo_v34_fix', nome: 'Vertigo', download: 'https://www.mediafire.com/file/ovzal4f70ottbt7/MAPA+VERTIGO.zip/file' },
@@ -50,12 +50,141 @@ const POOL_MAPAS = [
 const MAPAS_4FUN = {
     'de_dust2_fps': { nome: 'Dust2 4Fun', download: 'https://www.mediafire.com/file/abs6m2rretk03xt/MAPA_DUST2FPS_4FUN.zip/file' },
     'de_mirage_csgo_v2': { nome: 'Mirage 4Fun', download: 'https://www.mediafire.com/file/7wldyhc5rcd1tnh/MAPA+MIRAGE+4FUN.zip/file' },
-    'de_inferno_csgo_cssold_fix': { nome: 'Inferno 4Fun', download: 'https://www.mediafire.com/file/ksjjrwprcriog6n/MAPA+INFERNO.zip/file' }
+    'inferno2': { nome: 'Inferno 4Fun', download: 'https://www.mediafire.com/file/ksjjrwprcriog6n/MAPA+INFERNO.zip/file' }
 };
 
 // Gerenciadores de estado para manter mensagens no rodapé
 const vetosAtivos = new Map();
 const paineisAtivos = new Map();
+const paineisMixAdminAtivos = new Map();
+
+// Timeout padrão das requisições RCON
+const RCON_TIMEOUT = 3000;
+
+// Verifica se o membro tem permissão de staff (admin do Discord, cargo do mix ou cargo do 4Fun)
+async function membroEhStaff(interaction) {
+    if (interaction.member.permissions.has('Administrator')) return true;
+
+    const configMix = await db.get(`rcon_${interaction.guildId}`);
+    if (configMix && configMix.cargoId && interaction.member.roles.cache.has(configMix.cargoId)) return true;
+
+    const config4Fun = await db.get(`rcon_${interaction.guildId}_4fun`);
+    if (config4Fun && config4Fun.cargoId && interaction.member.roles.cache.has(config4Fun.cargoId)) return true;
+
+    return false;
+}
+
+// Executa um comando RCON e retorna a resposta (config RCON do mix por padrão)
+async function enviarRCON(interaction, comando, usar4Fun = false) {
+    const suffix = usar4Fun ? '_4fun' : '';
+    const serverConfig = await db.get(`rcon_${interaction.guildId}${suffix}`);
+    if (!serverConfig) throw new Error('Servidor RCON não configurado.');
+
+    const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: RCON_TIMEOUT });
+    await rcon.connect();
+    try {
+        return await rcon.send(comando);
+    } finally {
+        await rcon.end().catch(() => {});
+    }
+}
+
+// Monta as opções (jogadores conectados) para o menu de seleção de kick/ban
+function montarOpcoesJogadores(statusResp) {
+    const options = [];
+    for (const l of statusResp.split('\n')) {
+        const linhaLimpa = l.trim();
+        if (linhaLimpa.startsWith('#') && !linhaLimpa.includes('userid')) {
+            const match = linhaLimpa.match(/^#\s+(\d+)\s+"([^"]+)"\s+([^\s]+)/);
+            const ipMatch = linhaLimpa.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+)\b/);
+            if (match && options.length < 25) {
+                const userId = match[1];
+                const nomePlayer = match[2];
+                const steamId = match[3];
+                const ipPlayer = ipMatch ? ipMatch[1] : 'N/A';
+                options.push({
+                    label: nomePlayer.slice(0, 25),
+                    description: `SteamID: ${steamId} | IP: ${ipPlayer}`.slice(0, 100),
+                    value: userId
+                });
+            }
+        }
+    }
+    return options;
+}
+
+// Encontra os dados completos (nome/ip/steamid) de um jogador pelo userid no status
+function acharJogadorNoStatus(statusResp, userId) {
+    let nomeJogador = 'Desconhecido';
+    let ipParaBanir = '';
+    let steamIdParaBanir = '';
+    let linhaEncontrada = '';
+
+    for (const l of statusResp.split('\n')) {
+        const linhaLimpa = l.trim();
+        if (linhaLimpa.startsWith('#') && linhaLimpa.includes(` ${userId} `)) {
+            linhaEncontrada = linhaLimpa;
+            const matchName = linhaLimpa.match(/^#\s+\d+\s+"([^"]+)"/);
+            if (matchName) nomeJogador = matchName[1];
+
+            const ipMatch = linhaLimpa.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+/);
+            if (ipMatch) ipParaBanir = ipMatch[1];
+
+            const matchSteam = linhaLimpa.match(/(STEAM_\d+:\d+:\d+|\[U:\d+:\d+\])/);
+            if (matchSteam) steamIdParaBanir = matchSteam[1];
+        }
+    }
+
+    return { nomeJogador, ipParaBanir, steamIdParaBanir, linhaEncontrada };
+}
+
+// Monta as opções para o menu de desbanimento (lê o store do último status capturado)
+function montarOpcoesBanidos(statusSalvo, acao = 'unban') {
+    const options = [];
+    for (const l of (statusSalvo.linhas || [])) {
+        if (options.length >= 25) break;
+        const match = l.match(/^#\s+(\d+)\s+"([^"]+)"\s+([^\s]+)/);
+        const ipMatch = l.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(?::\d+)?\b/);
+        if (!match) continue;
+        const userId = match[1];
+        const nome = match[2];
+        const steamId = match[3];
+        const ip = ipMatch ? ipMatch[1] : 'N/A';
+        options.push({
+            label: `Unban: ${nome}`.slice(0, 25),
+            description: `SteamID: ${steamId} | IP: ${ip}`.slice(0, 100),
+            value: userId
+        });
+    }
+    return options;
+}
+
+// Executa o banimento por IP + SteamID (e kicka o jogador)
+async function banirJogador(interaction, userId, usar4Fun = false) {
+    const statusResp = await enviarRCON(interaction, 'status', usar4Fun);
+    const { nomeJogador, ipParaBanir, steamIdParaBanir, linhaEncontrada } = acharJogadorNoStatus(statusResp, userId);
+
+    // Salva o status atual (lista de jogadores) para permitir desbanir depois
+    const linhasSalvas = statusResp.split('\n').map(l => l.trim()).filter(l => l.startsWith('#') && !l.includes('userid'));
+    await db.set(`ultimo_status_${interaction.guildId}${usar4Fun ? '_4fun' : ''}`, { linhas: linhasSalvas, quando: Date.now() });
+
+    if (ipParaBanir) {
+        await enviarRCON(interaction, `addip 0 ${ipParaBanir}`, usar4Fun).catch(() => {});
+        await enviarRCON(interaction, 'writeip', usar4Fun).catch(() => {});
+    }
+
+    if (steamIdParaBanir) {
+        await enviarRCON(interaction, `banid 0 ${steamIdParaBanir} kick`, usar4Fun).catch(() => {});
+        await enviarRCON(interaction, 'writeid', usar4Fun).catch(() => {});
+    } else {
+        await enviarRCON(interaction, `banid 0 ${userId} kick`, usar4Fun).catch(() => {});
+        await enviarRCON(interaction, 'writeid', usar4Fun).catch(() => {});
+    }
+
+    await enviarRCON(interaction, `kickid ${userId} "Você foi banido permanentemente por IP."`, usar4Fun).catch(() => {});
+
+    return { nomeJogador, ipParaBanir, steamIdParaBanir, linhaEncontrada };
+}
 
 // Registrando Comandos Slash (/)
 const commands = [
@@ -90,7 +219,12 @@ const commands = [
         .setName('enviar-msg')
         .setDescription('Envia uma mensagem personalizada com um link de imagem/GIF')
         .addStringOption(opt => opt.setName('mensagem').setDescription('O texto que o bot vai enviar').setRequired(false))
-        .addStringOption(opt => opt.setName('link_gif').setDescription('Cole o link do GIF aqui').setRequired(false))
+        .addStringOption(opt => opt.setName('link_gif').setDescription('Cole o link do GIF aqui').setRequired(false)),
+
+    new SlashCommandBuilder()
+        .setName('confighl')
+        .setDescription('Configura o canal onde os clipes de highlight serão enviados')
+        .addChannelOption(opt => opt.setName('canal').setDescription('Canal de highlights').setRequired(true))
 ];
 
 const rest = new REST({ version: '10' }).setToken(config.token);
@@ -389,18 +523,10 @@ client.on('interactionCreate', async interaction => {
     }
 
     if (commandName === 'enviar-msg') {
-        const serverConfig = await db.get(`rcon_${guildId}`);
-        let temPermissao = interaction.member.permissions.has('Administrator');
-
-        if (serverConfig && serverConfig.cargoId) {
-            if (interaction.member.roles.cache.has(serverConfig.cargoId)) {
-                temPermissao = true;
-            }
-        }
+        const temPermissao = await membroEhStaff(interaction);
 
         if (!temPermissao) {
-            const cargoExibicao = serverConfig && serverConfig.cargoId ? `<@&${serverConfig.cargoId}>` : 'Cargo Staff configurado';
-            return interaction.reply({ content: `🚫 Apenas administradores ou membros com o ${cargoExibicao} podem usar este comando.`, ephemeral: true });
+            return interaction.reply({ content: '🚫 Apenas administradores ou membros com o cargo Staff autorizado podem usar este comando.', ephemeral: true });
         }
 
         const msgTexto = interaction.options.getString('mensagem');
@@ -420,6 +546,12 @@ client.on('interactionCreate', async interaction => {
         } catch (err) {
             await interaction.reply({ content: `❌ Erro ao enviar mensagem: ${err.message}`, ephemeral: true });
         }
+    }
+
+    if (commandName === 'confighl') {
+        const canal = interaction.options.getChannel('canal');
+        await db.set(`hl_channel_${interaction.guildId}`, canal.id);
+        return interaction.reply({ content: `✅ Canal de highlights configurado: ${canal}`, ephemeral: true });
     }
 });
 
@@ -477,16 +609,78 @@ client.on('interactionCreate', async interaction => {
                 return interaction.editReply({ content: `❌ Erro RCON: ${err.message}` });
             }
         }
+
+        if (interaction.customId === 'modal_rcon_custom_mix') {
+            const isStaff = await membroEhStaff(interaction);
+            if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs autorizados!', ephemeral: true });
+
+            await interaction.deferReply({ ephemeral: true });
+            const comandoDigitado = interaction.fields.getTextInputValue('input_rcon_cmd');
+
+            try {
+                const respostaRcon = await enviarRCON(interaction, comandoDigitado);
+                return interaction.editReply({ content: `✅ Comando RCON enviado com sucesso!\n\`\`\`text\n${respostaRcon || 'Executado sem retorno.'}\n\`\`\`` });
+            } catch (err) {
+                return interaction.editReply({ content: `❌ Erro RCON: ${err.message}` });
+            }
+        }
         return;
     }
 
     if (interaction.isStringSelectMenu()) {
         const customId = interaction.customId;
+
+        // ===== MENUS DE SELEÇÃO DO PAINEL DE ADMIN DO MIX =====
+        if (customId.startsWith('mixadmin_select_')) {
+            const isStaff = await membroEhStaff(interaction);
+            if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs autorizados!', ephemeral: true });
+
+            const acao = customId.replace('mixadmin_select_', '');
+            const valorEscolhido = interaction.values[0];
+
+            await interaction.deferReply({ ephemeral: true });
+            try {
+                if (acao === 'kick') {
+                    const respostaRcon = await enviarRCON(interaction, `kickid ${valorEscolhido} "Você foi kickado do servidor por um staff."`);
+                    return interaction.editReply({ content: `✅ Ação executada com sucesso!\n\`\`\`text\n${respostaRcon || 'Comando enviado.'}\n\`\`\`` });
+                }
+
+                if (acao === 'ban') {
+                    const { nomeJogador, ipParaBanir } = await banirJogador(interaction, valorEscolhido, false);
+                    return interaction.editReply({
+                        content: `🔨 O jogador **${nomeJogador}** (IP: \`${ipParaBanir || 'Protegido/Indisponível'}\`) foi **banido por IP** e desconectado com sucesso do servidor!`
+                    });
+                }
+
+                if (acao === 'unban') {
+                    const statusSalvo = await db.get(`ultimo_status_${interaction.guildId}`);
+                    const linha = statusSalvo && statusSalvo.linhas ? statusSalvo.linhas.find(l => new RegExp(`^#\\s+${valorEscolhido}\\s+`).test(l)) : '';
+                    const match = linha ? linha.match(/^#\s+\d+\s+"([^"]+)"\s+([^\s]+)/) : null;
+                    const nome = match ? match[1] : 'Desconhecido';
+                    const steamId = match ? match[2] : '';
+                    const ipMatch = linha ? linha.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(?::\d+)?\b/) : null;
+                    const ip = ipMatch ? ipMatch[1] : '';
+
+                    let respostaRcon = '';
+                    if (ip) respostaRcon += await enviarRCON(interaction, `removeip ${ip}`).catch(() => '') + '\n';
+                    if (steamId && /^STEAM_|^\[U:/.test(steamId)) respostaRcon += await enviarRCON(interaction, `removeid ${steamId}`).catch(() => '') + '\n';
+                    await enviarRCON(interaction, 'writeip').catch(() => {});
+                    await enviarRCON(interaction, 'writeid').catch(() => {});
+
+                    return interaction.editReply({ content: `✅ O jogador **${nome}** foi **desbanido** (IP: \`${ip || 'N/A'}\` / SteamID: \`${steamId || 'N/A'}\`)!\n\`\`\`text\n${respostaRcon || 'Banlist atualizada.'}\n\`\`\`` });
+                }
+
+                return interaction.editReply({ content: '⚠️ Ação desconhecida.' });
+            } catch (err) {
+                return interaction.editReply({ content: `❌ Erro ao executar comando RCON: ${err.message}` });
+            }
+        }
+
         if (customId.startsWith('4fun_select_')) {
             const serverConfig = await db.get(`rcon_${interaction.guildId}_4fun`);
             if (!serverConfig) return interaction.reply({ content: '❌ Servidor 4Fun não configurado.', ephemeral: true });
 
-            const isStaff = interaction.member.roles.cache.has(serverConfig.cargoId) || interaction.member.permissions.has('Administrator');
+            const isStaff = await membroEhStaff(interaction);
             if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs autorizados!', ephemeral: true });
 
             const acao = customId.replace('4fun_select_', '');
@@ -494,64 +688,42 @@ client.on('interactionCreate', async interaction => {
 
             await interaction.deferReply({ ephemeral: true });
             try {
-                const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 3000 });
-                await rcon.connect();
-
-                let respostaRcon = '';
                 if (acao === 'kick') {
-                    respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Você foi kickado do servidor 4Fun por um staff."`);
-                } else if (acao === 'ban') {
-                    const statusResp = await rcon.send('status');
-                    const linhas = statusResp.split('\n');
-                    let nomeJogador = 'Desconhecido';
-                    let ipParaBanir = '';
-                    let steamIdParaBanir = '';
-
-                    linhas.forEach(l => {
-                        const linhaLimpa = l.trim();
-                        // Procura a linha correspondente ao userid exato selecionado
-                        if (linhaLimpa.startsWith('#') && linhaLimpa.includes(` ${valorEscolhido} `)) {
-                            const matchName = linhaLimpa.match(/^#\s+\d+\s+"([^"]+)"/);
-                            if (matchName) nomeJogador = matchName[1];
-
-                            // Captura o IP caso exista na linha do status
-                            const ipMatch = linhaLimpa.match(/(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}):\d+/);
-                            if (ipMatch) ipParaBanir = ipMatch[1];
-
-                            // Captura a SteamID caso exista
-                            const matchSteam = linhaLimpa.match(/(STEAM_\d+:\d+:\d+|\[U:\d+:\d+\])/);
-                            if (matchSteam) steamIdParaBanir = matchSteam[1];
-                        }
-                    });
-
-                    // Aplica o banimento por IP de forma segura (ou via SteamID/UserID sem derrubar o server)
-                    if (ipParaBanir) {
-                        await rcon.send(`addip 0 ${ipParaBanir}`).catch(() => {});
-                        await rcon.send('writeip').catch(() => {});
-                    }
-
-                    if (steamIdParaBanir) {
-                        await rcon.send(`banid 0 ${steamIdParaBanir} kick`).catch(() => {});
-                        await rcon.send('writeid').catch(() => {});
-                    } else {
-                        await rcon.send(`banid 0 ${valorEscolhido} kick`).catch(() => {});
-                        await rcon.send('writeid').catch(() => {});
-                    }
-
-                    // Força o kick do player sem gerar erro de userid not found no chat
-                    respostaRcon = await rcon.send(`kickid ${valorEscolhido} "Você foi banido permanentemente por IP."`).catch(() => 'Kick efetuado');
-                    await rcon.end();
-
-                    return interaction.editReply({ 
-                        content: `🔨 O jogador **${nomeJogador}** (IP: \`${ipParaBanir || 'Protegido/Indisponível'}\`) foi **banido por IP** e desconectado com sucesso do servidor!` 
-                    });
-
-                } else if (acao === 'map') {
-                    respostaRcon = await rcon.send(`changelevel ${valorEscolhido}`);
+                    const respostaRcon = await enviarRCON(interaction, `kickid ${valorEscolhido} "Você foi kickado do servidor 4Fun por um staff."`, true);
+                    return interaction.editReply({ content: `✅ Ação executada com sucesso!\n\`\`\`text\n${respostaRcon || 'Comando enviado.'}\n\`\`\`` });
                 }
 
-                await rcon.end();
-                return interaction.editReply({ content: `✅ Ação executada com sucesso!\n\`\`\`text\n${respostaRcon || 'Comando enviado.'}\n\`\`\`` });
+                if (acao === 'unban') {
+                    const statusSalvo = await db.get(`ultimo_status_${interaction.guildId}_4fun`);
+                    const linha = statusSalvo && statusSalvo.linhas ? statusSalvo.linhas.find(l => new RegExp(`^#\\s+${valorEscolhido}\\s+`).test(l)) : '';
+                    const match = linha ? linha.match(/^#\s+\d+\s+"([^"]+)"\s+([^\s]+)/) : null;
+                    const nome = match ? match[1] : 'Desconhecido';
+                    const steamId = match ? match[2] : '';
+                    const ipMatch = linha ? linha.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3})(?::\d+)?\b/) : null;
+                    const ip = ipMatch ? ipMatch[1] : '';
+
+                    let respostaRcon = '';
+                    if (ip) respostaRcon += await enviarRCON(interaction, `removeip ${ip}`, true).catch(() => '') + '\n';
+                    if (steamId && /^STEAM_|^\[U:/.test(steamId)) respostaRcon += await enviarRCON(interaction, `removeid ${steamId}`, true).catch(() => '') + '\n';
+                    await enviarRCON(interaction, 'writeip', true).catch(() => {});
+                    await enviarRCON(interaction, 'writeid', true).catch(() => {});
+
+                    return interaction.editReply({ content: `✅ O jogador **${nome}** foi **desbanido** (IP: \`${ip || 'N/A'}\` / SteamID: \`${steamId || 'N/A'}\`)!\n\`\`\`text\n${respostaRcon || 'Banlist atualizada.'}\n\`\`\`` });
+                }
+
+                if (acao === 'ban') {
+                    const { nomeJogador, ipParaBanir } = await banirJogador(interaction, valorEscolhido, true);
+                    return interaction.editReply({
+                        content: `🔨 O jogador **${nomeJogador}** (IP: \`${ipParaBanir || 'Protegido/Indisponível'}\`) foi **banido por IP** e desconectado com sucesso do servidor!`
+                    });
+                }
+
+                if (acao === 'map') {
+                    const respostaRcon = await enviarRCON(interaction, `changelevel ${valorEscolhido}`, true);
+                    return interaction.editReply({ content: `✅ Ação executada com sucesso!\n\`\`\`text\n${respostaRcon || 'Comando enviado.'}\n\`\`\`` });
+                }
+
+                return interaction.editReply({ content: '⚠️ Ação desconhecida.' });
             } catch (err) {
                 return interaction.editReply({ content: `❌ Erro ao executar comando RCON: ${err.message}` });
             }
@@ -570,11 +742,15 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply({ content: '❌ Servidor 4Fun não configurado.', ephemeral: true });
         }
 
-        const isStaff = interaction.member.roles.cache.has(serverConfig.cargoId) || interaction.member.permissions.has('Administrator');
+        const isStaff = customId === '4fun_refresh' ? true : await membroEhStaff(interaction);
+        if (customId !== '4fun_refresh' && !isStaff) {
+            return interaction.reply({ content: '🚫 Apenas administradores/staffs autorizados podem usar as funções de moderação do 4Fun!', ephemeral: true });
+        }
 
         // 1. Atualizar Status do Painel 4Fun manualmente via botão (Restrito apenas para staffs autorizados)
         if (customId === '4fun_refresh') {
-            if (!isStaff) {
+            const podeRefresh = await membroEhStaff(interaction);
+            if (!podeRefresh) {
                 return interaction.reply({ content: '🚫 Apenas staffs autorizados podem atualizar o painel manualmente!', ephemeral: true });
             }
 
@@ -653,6 +829,7 @@ client.on('interactionCreate', async interaction => {
                 new ButtonBuilder().setCustomId('4fun_cmd_ban').setLabel('🔨 Banir Jogador (IP)').setStyle(ButtonStyle.Danger)
             );
             const rowAdmin2 = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('4fun_cmd_unban').setLabel('↩️ Desbanir Jogador').setStyle(ButtonStyle.Success),
                 new ButtonBuilder().setCustomId('4fun_cmd_custom').setLabel('💬 Comando Customizado').setStyle(ButtonStyle.Primary)
             );
 
@@ -673,56 +850,45 @@ client.on('interactionCreate', async interaction => {
             return await interaction.showModal(modal);
         }
 
-        // Sub-botões de Ação Admin (Kick / Ban / Mapa)
-        if (customId === '4fun_cmd_kick' || customId === '4fun_cmd_ban' || customId === '4fun_cmd_map') {
+        // Sub-botões de Ação Admin (Kick / Ban / Mapa / Unban)
+        if (customId === '4fun_cmd_kick' || customId === '4fun_cmd_ban' || customId === '4fun_cmd_map' || customId === '4fun_cmd_unban') {
             if (!isStaff) return interaction.reply({ content: '🚫 Apenas staffs.', ephemeral: true });
 
             await interaction.deferReply({ ephemeral: true });
             try {
-                const rcon = new Rcon({ host: serverConfig.ip, port: parseInt(serverConfig.porta), password: serverConfig.senha, timeout: 3000 });
-                await rcon.connect();
-
                 if (customId === '4fun_cmd_map') {
-                    await rcon.end();
                     const selectMapa = new StringSelectMenuBuilder()
                         .setCustomId('4fun_select_map')
                         .setPlaceholder('Selecione o mapa exato do 4Fun')
                         .addOptions([
                             { label: 'Dust2 4Fun', value: 'de_dust2_fps' },
                             { label: 'Mirage 4Fun', value: 'de_mirage_csgo_v2' },
-                            { label: 'Inferno 4Fun', value: 'de_inferno_csgo_cssold_fix' }
+                            { label: 'Inferno 4Fun', value: 'inferno2' }
                         ]);
                     return interaction.editReply({ content: '🗺️ Escolha o mapa:', components: [new ActionRowBuilder().addComponents(selectMapa)] });
                 }
 
-                const statusResp = await rcon.send('status');
-                await rcon.end();
-
-                const linhas = statusResp.split('\n');
-                const options = [];
-
-                linhas.forEach(l => {
-                    const linhaLimpa = l.trim();
-                    if (linhaLimpa.startsWith('#') && !linhaLimpa.includes('userid')) {
-                        const match = linhaLimpa.match(/^#\s+(\d+)\s+"([^"]+)"\s+([^\s]+)/);
-                        const ipMatch = linhaLimpa.match(/\b(\d{1,3}\.\d{1,3}\.\d{1,3}\.\d{1,3}:\d+)\b/);
-
-                        if (match) {
-                            const userId = match[1];
-                            const nomePlayer = match[2];
-                            const steamId = match[3];
-                            const ipPlayer = ipMatch ? ipMatch[1] : 'N/A';
-
-                            if (options.length < 25) {
-                                options.push({
-                                    label: nomePlayer.slice(0, 25),
-                                    description: `SteamID: ${steamId} | IP: ${ipPlayer}`.slice(0, 100),
-                                    value: userId
-                                });
-                            }
-                        }
+                if (customId === '4fun_cmd_unban') {
+                    const statusSalvo = await db.get(`ultimo_status_${interaction.guildId}_4fun`);
+                    if (!statusSalvo || !statusSalvo.linhas || statusSalvo.linhas.length === 0) {
+                        return interaction.editReply({ content: '⚠️ Nenhum registro de jogadores salvo ainda. Faça um ban/kick primeiro para gerar a lista de desbanimento.' });
                     }
-                });
+
+                    const options = montarOpcoesBanidos(statusSalvo);
+                    if (options.length === 0) {
+                        return interaction.editReply({ content: '⚠️ Nenhum jogador encontrado no último registro.' });
+                    }
+
+                    const selectBan = new StringSelectMenuBuilder()
+                        .setCustomId('4fun_select_unban')
+                        .setPlaceholder('Selecione o jogador para desbanir')
+                        .addOptions(options);
+
+                    return interaction.editReply({ content: '↩️ Selecione o jogador que deseja **DESBANIR** (remove IP e SteamID do banlist):', components: [new ActionRowBuilder().addComponents(selectBan)] });
+                }
+
+                const statusResp = await enviarRCON(interaction, 'status', true);
+                const options = montarOpcoesJogadores(statusResp);
 
                 if (options.length === 0) {
                     return interaction.editReply({ content: '⚠️ Não há jogadores conectados no momento no servidor 4Fun.' });
@@ -754,14 +920,7 @@ client.on('interactionCreate', async interaction => {
             return interaction.reply({ content: '❌ Esta sessão de veto já foi finalizada ou expirou.', ephemeral: true });
         }
 
-        const serverConfig = await db.get(`rcon_${interaction.guildId}`);
-        let autorizacaoOK = false;
-
-        if (serverConfig && serverConfig.cargoId) {
-            autorizacaoOK = interaction.member.roles.cache.has(serverConfig.cargoId);
-        } else {
-            autorizacaoOK = interaction.member.permissions.has('Administrator');
-        }
+        const autorizacaoOK = await membroEhStaff(interaction);
 
         if (!autorizacaoOK) {
             return interaction.reply({ content: '🚫 Apenas membros do cargo Staff autorizado podem cancelar o veto!', ephemeral: true });
@@ -935,21 +1094,99 @@ client.on('interactionCreate', async interaction => {
             new ButtonBuilder().setCustomId('rcon_status').setLabel('📊 Status').setStyle(ButtonStyle.Primary)
         );
 
+        // Painel de Administração (mesmas funções do 4Fun: Kick / Ban / Desbanir / Comando Customizado)
+        const painelAdmin1 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('mixadmin_kick').setLabel('👢 Kickar Jogador').setStyle(ButtonStyle.Danger),
+            new ButtonBuilder().setCustomId('mixadmin_ban').setLabel('🔨 Banir Jogador (IP)').setStyle(ButtonStyle.Danger)
+        );
+        const painelAdmin2 = new ActionRowBuilder().addComponents(
+            new ButtonBuilder().setCustomId('mixadmin_unban').setLabel('↩️ Desbanir Jogador').setStyle(ButtonStyle.Success),
+            new ButtonBuilder().setCustomId('mixadmin_custom').setLabel('💬 Comando Customizado').setStyle(ButtonStyle.Primary)
+        );
+
         try {
             const novaMsgAnuncio = await interaction.followUp({
                 content: tagCargoMencao,
                 embeds: [embedAnuncio],
-                components: [painelLinha1, painelLinha2]
+                components: [painelLinha1, painelLinha2, painelAdmin1, painelAdmin2]
             });
 
             paineisAtivos.set(channelId, {
                 lastMessageId: novaMsgAnuncio.id,
                 content: tagCargoMencao,
                 embeds: [embedAnuncio],
-                components: [painelLinha1, painelLinha2]
+                components: [painelLinha1, painelLinha2, painelAdmin1, painelAdmin2]
             });
         } catch (errSend) {
             console.error('❌ Erro ao enviar a nova mensagem:', errSend);
+        }
+    }
+
+    // ===== PAINEL DE ADMINISTRAÇÃO DO MIX (Kick / Ban / Desbanir / Custom) =====
+    if (customId.startsWith('mixadmin_')) {
+        const isStaff = await membroEhStaff(interaction);
+        if (!isStaff) {
+            return interaction.reply({ content: '🚫 Apenas administradores/staffs autorizados podem usar as funções de moderação!', ephemeral: true });
+        }
+
+        // Abrir modal de comando customizado
+        if (customId === 'mixadmin_custom') {
+            const modal = new ModalBuilder().setCustomId('modal_rcon_custom_mix').setTitle('💬 Comando RCON Personalizado (Mix)');
+            const inputComando = new TextInputBuilder()
+                .setCustomId('input_rcon_cmd')
+                .setLabel('Digite o comando RCON exato:')
+                .setPlaceholder('Ex: mp_restartgame 1 ou sv_password abc')
+                .setStyle(TextInputStyle.Short)
+                .setRequired(true);
+            modal.addComponents(new ActionRowBuilder().addComponents(inputComando));
+            return await interaction.showModal(modal);
+        }
+
+        await interaction.deferReply({ ephemeral: true });
+        try {
+            if (customId === 'mixadmin_unban') {
+                const statusSalvo = await db.get(`ultimo_status_${interaction.guildId}`);
+                if (!statusSalvo || !statusSalvo.linhas || statusSalvo.linhas.length === 0) {
+                    return interaction.editReply({ content: '⚠️ Nenhum registro de jogadores salvo ainda. Faça um ban/kick primeiro para gerar a lista de desbanimento.' });
+                }
+
+                const options = montarOpcoesBanidos(statusSalvo);
+                if (options.length === 0) {
+                    return interaction.editReply({ content: '⚠️ Nenhum jogador encontrado no último registro.' });
+                }
+
+                const selectBan = new StringSelectMenuBuilder()
+                    .setCustomId('mixadmin_select_unban')
+                    .setPlaceholder('Selecione o jogador para desbanir')
+                    .addOptions(options);
+
+                return interaction.editReply({ content: '↩️ Selecione o jogador que deseja **DESBANIR** (remove IP e SteamID do banlist):', components: [new ActionRowBuilder().addComponents(selectBan)] });
+            }
+
+            const statusResp = await enviarRCON(interaction, 'status');
+            const options = montarOpcoesJogadores(statusResp);
+
+            if (options.length === 0) {
+                return interaction.editReply({ content: '⚠️ Não há jogadores conectados no momento.' });
+            }
+
+            if (customId === 'mixadmin_kick') {
+                const selectPlayers = new StringSelectMenuBuilder()
+                    .setCustomId('mixadmin_select_kick')
+                    .setPlaceholder('Selecione o jogador conectado')
+                    .addOptions(options);
+                return interaction.editReply({ content: '👤 Selecione abaixo qual jogador conectado deseja **KICKAR**:', components: [new ActionRowBuilder().addComponents(selectPlayers)] });
+            }
+
+            if (customId === 'mixadmin_ban') {
+                const selectPlayers = new StringSelectMenuBuilder()
+                    .setCustomId('mixadmin_select_ban')
+                    .setPlaceholder('Selecione o jogador conectado')
+                    .addOptions(options);
+                return interaction.editReply({ content: '👤 Selecione abaixo qual jogador conectado deseja **BANIR POR IP**:', components: [new ActionRowBuilder().addComponents(selectPlayers)] });
+            }
+        } catch (err) {
+            return interaction.editReply({ content: `❌ Erro ao buscar jogadores online: ${err.message}` });
         }
     }
 
@@ -1137,5 +1374,43 @@ client.on('voiceStateUpdate', async (oldState, newState) => {
         await verificarEEnviarMix(guild);
     }, 6000);
 });
+
+const express = require('express');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
+const httpApp = express();
+
+// Recebe o clipe do PC e posta no canal configurado (/confighl)
+httpApp.post('/highlight', express.raw({ type: '*/*', limit: '150mb' }), async (req, res) => {
+    try {
+        if (req.query.key !== config.hlKey) return res.status(403).send('Chave inválida');
+        const guildId = req.query.guild || '';
+        const title = req.query.title || 'Highlight';
+        const channelId = await db.get(`hl_channel_${guildId}`);
+        if (!channelId) return res.status(400).send('Nenhum canal configurado (use /confighl)');
+        if (!req.body || req.body.length === 0) return res.status(400).send('Sem arquivo');
+
+        const guild = client.guilds.cache.get(guildId);
+        const channel = guild ? guild.channels.cache.get(channelId) : null;
+        if (!channel) return res.status(400).send('Canal inválido');
+
+        const tmp = path.join(os.tmpdir(), `hl_${Date.now()}.mp4`);
+        fs.writeFileSync(tmp, req.body);
+        try {
+            await channel.send({ content: title, files: [tmp] });
+            res.status(200).send('OK');
+        } catch (e) {
+            res.status(500).send('Erro: ' + e.message);
+        } finally {
+            fs.unlinkSync(tmp);
+        }
+    } catch (e) {
+        res.status(500).send('Erro: ' + e.message);
+    }
+});
+
+const HL_PORT = 48333;
+httpApp.listen(HL_PORT, '0.0.0.0', () => console.log(`🔔 Receiver de highlights na porta ${HL_PORT}`));
 
 client.login(config.token);
