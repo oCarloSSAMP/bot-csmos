@@ -1091,7 +1091,8 @@ client.on('interactionCreate', async interaction => {
             new ButtonBuilder().setCustomId('rcon_live').setLabel('🟢 LIVE (3s)').setStyle(ButtonStyle.Success),
             new ButtonBuilder().setCustomId('rcon_pause').setLabel('⏸️ Pause').setStyle(ButtonStyle.Secondary),
             new ButtonBuilder().setCustomId('rcon_unpause').setLabel('▶️ Despause').setStyle(ButtonStyle.Success),
-            new ButtonBuilder().setCustomId('rcon_status').setLabel('📊 Status').setStyle(ButtonStyle.Primary)
+            new ButtonBuilder().setCustomId('rcon_status').setLabel('📊 Status').setStyle(ButtonStyle.Primary),
+            new ButtonBuilder().setCustomId('rcon_overtime').setLabel('⏱️ Overtime').setStyle(ButtonStyle.Danger)
         );
 
         // Painel de Administração (mesmas funções do 4Fun: Kick / Ban / Desbanir / Comando Customizado)
@@ -1262,6 +1263,9 @@ client.on('interactionCreate', async interaction => {
             } else if (customId === 'rcon_unpause') {
                 await executarRCON(interaction.guildId, 'exec unpause');
                 await interaction.editReply({ content: '▶️ Comando **exec unpause** enviado!' });
+            } else if (customId === 'rcon_overtime') {
+                await executarRCON(interaction.guildId, 'exec ot');
+                await interaction.editReply({ content: '⏱️ Comando **exec ot** (Overtime) enviado!' });
             }
         } catch (error) {
             await interaction.editReply({ content: `❌ Erro ao enviar RCON: ${error.message}` });
