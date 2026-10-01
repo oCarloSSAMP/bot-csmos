@@ -36,7 +36,7 @@ const client = new Client({
 const POOL_MAPAS = [
     { id: 'de_dust2_csgo_new_v2', nome: 'Dust2', download: 'https://www.mediafire.com/file/yek5axz4dk64azm/MAPA_DUST2.zip/file' },
     { id: 'de_mirage_cs2', nome: 'Mirage', download: 'https://www.mediafire.com/file/qwgwlwrd9cs193d/MAPA+MIRAGE.zip/file' },
-    { id: 'inferno2', nome: 'Inferno', download: 'https://www.mediafire.com/file/ksjjrwprcriog6n/MAPA+INFERNO.zip/file' },
+    { id: 'inferno2', nome: 'Inferno', download: 'https://www.mediafire.com/file/eo566t8hlxwjoc2/inferno2.zip/file' },
     { id: 'de_cache_fps', nome: 'Cache', download: 'https://www.mediafire.com/file/pse7q8hcbcpynyx/MAPA+CACHE.zip/file' },
     { id: 'de_nukenew_csgo', nome: 'Nuke', download: 'https://www.mediafire.com/file/qbb5r99lqj1agdm/MAPA+NUKE.zip/file' },
     { id: 'de_vertigo_csgo_v34_fix', nome: 'Vertigo', download: 'https://www.mediafire.com/file/ovzal4f70ottbt7/MAPA+VERTIGO.zip/file' },
@@ -50,7 +50,7 @@ const POOL_MAPAS = [
 const MAPAS_4FUN = {
     'de_dust2_fps': { nome: 'Dust2 4Fun', download: 'https://www.mediafire.com/file/abs6m2rretk03xt/MAPA_DUST2FPS_4FUN.zip/file' },
     'de_mirage_csgo_v2': { nome: 'Mirage 4Fun', download: 'https://www.mediafire.com/file/7wldyhc5rcd1tnh/MAPA+MIRAGE+4FUN.zip/file' },
-    'inferno2': { nome: 'Inferno 4Fun', download: 'https://www.mediafire.com/file/ksjjrwprcriog6n/MAPA+INFERNO.zip/file' }
+    'inferno2': { nome: 'Inferno 4Fun', download: 'https://www.mediafire.com/file/eo566t8hlxwjoc2/inferno2.zip/file' }
 };
 
 // Gerenciadores de estado para manter mensagens no rodapé
